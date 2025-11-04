@@ -1,5 +1,5 @@
 set_project("catter")
-set_allowedplats("windows")
+set_allowedplats("windows", "linux")
 
 
 set_languages("c++23")
@@ -9,8 +9,9 @@ if has_config("dev") then
    add_rules("plugin.compile_commands.autoupdate", {outputdir = "build", lsp = "clangd"})
 end
 
-
-add_requires("microsoft-detours")
+if is_plat("windows") then
+    add_requires("microsoft-detours")
+end
 
 if is_plat("windows") then
     target("catter-hook64")
@@ -20,6 +21,14 @@ if is_plat("windows") then
         add_syslinks("user32")
 
         add_packages("microsoft-detours")
+end
+
+if is_plat("linux") then
+    target("catter-hook-linux")
+        set_kind("shared")
+        add_includedirs("src")
+        add_files("src/hook/linux/libhook/*.cpp")
+        add_syslinks("pthread")
 end
 
 
