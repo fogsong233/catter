@@ -84,7 +84,7 @@ int inject_catter_env(const catter::Session& ss, char* const*& envp_) {
         size_t idx = 0;
         envp_copy[idx++] = ss.necessary_envp_entry[0];
         envp_copy[idx++] = ss.necessary_envp_entry[1];
-        for(const char* it = envp; it != nullptr; ++it) {
+        for(const char* it = envp[0]; it != nullptr; ++it) {
             envp_copy[idx++] = it;
             if(idx >= (envp_size - 1)) {
                 // no enough space
