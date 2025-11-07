@@ -28,7 +28,7 @@ public:
     Executor(const Linker& linker,
              const Session& session,
              Resolver& resolver,
-             Recorder recorder) noexcept;
+             Recorder& recorder) noexcept;
 
     ~Executor() noexcept = default;
 
@@ -56,7 +56,7 @@ public:
 private:
     const catter::Linker& linker_;
     const catter::Session& session_;
-    catter::Recorder recorder_;
+    catter::Recorder& recorder_;
     catter::Resolver& resolver_;
 };
 }  // namespace catter

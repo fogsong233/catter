@@ -28,8 +28,11 @@ if is_plat("linux") then
     target("catter-hook-linux")
         set_kind("shared")
         add_includedirs("src/hook/linux")
+        add_files("src/hook/linux/*.cc")
         add_files("src/hook/linux/libhook/*.cc")
-        add_cxxflags("-ffreestanding")
+        if has_config("dev") then
+            add_defines("DEBUG")
+        end
 end
 
 

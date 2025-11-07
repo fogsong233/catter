@@ -5,6 +5,7 @@
 #include "session.h"
 #include "resolver.h"
 #include "executor.h"
+#include "debug.h"
 
 #include <linux/limits.h>
 #include "unistd.h"
@@ -130,6 +131,7 @@ extern "C" void on_unload() {
 
 extern "C" int execve(const char* path, char* const argv[], char* const envp[]) {
     ct::Resolver resolver;
+    INFO("hooked execve called: path={}, argv[0]={}", path, argv[0]);
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 

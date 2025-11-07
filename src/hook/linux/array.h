@@ -1,5 +1,6 @@
 #pragma once
 
+#include "debug.h"
 #include <cstddef>
 
 namespace catter::array {
@@ -12,8 +13,9 @@ namespace catter::array {
  */
 template <typename T>
 constexpr T* end(T* it) noexcept {
-    if(it == nullptr)
+    if(it == nullptr) {
         return nullptr;
+    }
 
     while(*it != 0)
         ++it;

@@ -34,7 +34,7 @@ public:
     };
 
 private:
-    const char* next_path_separator(const char* const current, const char* const end) {
+    const char* next_path_separator(const char* const current, const char* const end) const {
         auto it = current;
         while((it != end) && (*it != SeparatorCh)) {
             ++it;
@@ -103,7 +103,7 @@ public:
     };
 };
 
-using Paths = Splitter<config::OS_DIR_SEPARATOR>;
+using Paths = Splitter<config::OS_PATH_SEPARATOR>;
 using SearchPaths = Splitter<config::OS_PATH_SEPARATOR>;
 
 }  // namespace catter

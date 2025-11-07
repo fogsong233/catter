@@ -1,6 +1,7 @@
 #include "io.h"
 #include "array.h"
 #include "config.h"
+#include "debug.h"
 #include <unistd.h>
 
 #include <fcntl.h>
@@ -77,6 +78,7 @@ const char* Recorder::getFilePath() noexcept {
 
 int Recorder::write(std::initializer_list<const char*> data) noexcept {
     if(!valid()) {
+        INFO("recorder is not valid");
         return -1;
     }
     if(const auto file_path = getFilePath(); file_path != nullptr) {
@@ -99,10 +101,12 @@ int Recorder::write(std::initializer_list<const char*> data) noexcept {
 };
 
 int Recorder::writeErr(const char* data) noexcept {
+    ERROR("recording error: {}", data);
     return write({config::ERROR_PREFFIX, data, "\n"});
 };
 
 int Recorder::writeCmd(const char* data) noexcept {
+    INFO("recording cmd: {}", data);
     return write({data, "\n"});
 };
 
