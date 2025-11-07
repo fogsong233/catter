@@ -3,7 +3,6 @@ add_rules("mode.debug", "mode.release")
 set_allowedplats("windows", "linux")
 
 set_languages("c++23")
-set_toolchains("clang")
 
 option("dev", {default = true})
 if has_config("dev") then
