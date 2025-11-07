@@ -15,16 +15,17 @@ struct Linker {
     virtual ~Linker() noexcept = default;
 
     [[nodiscard]]
-    virtual std::expected<int, int> execve(const char* path,
-                                           char* const argv[],
-                                           char* const envp[]) const noexcept;
+    virtual std::expected<int, const char*> execve(const char* path,
+                                                   char* const argv[],
+                                                   char* const envp[]) const noexcept;
 
     [[nodiscard]]
-    virtual std::expected<int, int> posix_spawn(pid_t* pid,
-                                                const char* path,
-                                                const posix_spawn_file_actions_t* file_actions,
-                                                const posix_spawnattr_t* attrp,
-                                                char* const argv[],
-                                                char* const envp[]) const noexcept;
+    virtual std::expected<int, const char*>
+        posix_spawn(pid_t* pid,
+                    const char* path,
+                    const posix_spawn_file_actions_t* file_actions,
+                    const posix_spawnattr_t* attrp,
+                    char* const argv[],
+                    char* const envp[]) const noexcept;
 };
 }  // namespace catter

@@ -3,6 +3,7 @@
 #include "array.h"
 #include "config.h"
 #include "environment.h"
+#include "io.h"
 #include "paths.h"
 #include "resolver.h"
 #include "linker.h"
@@ -13,23 +14,48 @@
 #include <unistd.h>
 
 namespace {
+#define INIT_EXEC() bool able_to_inject = true;
 
 #define CHECK_SESSION(SESSION_)                                                                    \
     do {                                                                                           \
         if(!catter::session::is_valid(SESSION_)) {                                                 \
-            return std::unexpected(EIO);                                                           \
+            recorder_.writeErr(                                                                    \
+                "invalid enviroment variables of hook library, lost required value");              \
+            able_to_inject = false;                                                                \
         }                                                                                          \
     } while(false)
 
 #define CHECK_POINTER(PTR_)                                                                        \
     do {                                                                                           \
         if(nullptr == (PTR_)) {                                                                    \
-            return std::unexpected(EFAULT);                                                        \
+            return EFAULT;                                                                         \
+        }                                                                                          \
+    } while(false)
+#define LOGGING_CMD(PATH_, ARGV_)                                                                  \
+    if(able_to_inject) {                                                                           \
+        char cmd_buf[PATH_MAX * 4];                                                                \
+        char* it = cmd_buf;                                                                        \
+        if(build_cmd(it, cmd_buf + sizeof(cmd_buf), const_cast<char*>(PATH_), ARGV_) == 0) {       \
+            recorder_.writeCmd(cmd_buf);                                                           \
+        } else {                                                                                   \
+            recorder_.writeErr("failed to build command string");                                  \
+        }                                                                                          \
+    }
+
+#define INJECT_PRELOAD(SESSION_, ENVP_)                                                            \
+    do {                                                                                           \
+        if(able_to_inject) {                                                                       \
+            if(inject_preload(SESSION_, ENVP_) != 0) {                                             \
+                recorder_.writeErr("failed to inject preload library path");                       \
+            }                                                                                      \
         }                                                                                          \
     } while(false)
 
 /// add our catter hook library to LD_PRELOAD
 int inject_preload(const catter::Session& ss, char* const* envp_) {
+    if(!catter::session::is_valid(ss)) {
+        return -1;
+    }
     const char** envp = const_cast<const char**>(envp_);
     constexpr static auto area_size =
         PATH_MAX * 10 + 20 + catter::array::length(catter::config::KEY_PRELOAD);
@@ -89,6 +115,24 @@ int inject_preload(const catter::Session& ss, char* const* envp_) {
     return (it == nullptr) ? -1 : 0;
 };
 
+int build_cmd(char*& it, char* end, char* const path, char* const argv[]) {
+    // copy path
+    it = catter::array::copy(path, path + catter::array::length(path), it, end);
+    if(it == nullptr) {
+        return -1;
+    }
+    // copy args
+    for(size_t idx = 1; argv[idx] != nullptr; ++idx) {
+        *it = ' ';
+        it++;
+        it = catter::array::copy(argv[idx], argv[idx] + catter::array::length(argv[idx]), it, end);
+        if(it == nullptr) {
+            return -1;
+        }
+    }
+    *it = '\0';
+    return 0;
+}
 }  // namespace
 
 #pragma GCC diagnostic push
@@ -96,96 +140,117 @@ int inject_preload(const catter::Session& ss, char* const* envp_) {
 
 namespace catter {
 
-Executor::Executor(const Linker& linker, const Session& session, Resolver& resolver) noexcept :
-    linker_(linker), session_(session), resolver_(resolver) {}
+/// We separate the log and execute process, ensuring that even if the logging fails,
+/// the execution can still proceed.
+Executor::Executor(const Linker& linker,
+                   const Session& session,
+                   Resolver& resolver,
+                   Recorder recorder) noexcept :
+    linker_(linker), session_(session), resolver_(resolver), recorder_(recorder) {}
 
-std::expected<int, int> Executor::execve(const char* path,
-                                         char* const* argv,
-                                         char* const* envp) const {
+int Executor::execve(const char* path, char* const* argv, char* const* envp) {
+    INIT_EXEC();
     CHECK_SESSION(session_);
     CHECK_POINTER(path);
 
-    if(auto executable = resolver_.from_current_directory(path); executable.has_value()) {
-        if(inject_preload(session_, envp) != 0) {
-            // TODO: inject error
-        }
-        return linker_.execve(executable.value(), argv, envp);
-    } else {
-        return std::unexpected(executable.error());
+    auto executable_res = resolver_.from_current_directory(path);
+    if(!executable_res.has_value()) {
+        return executable_res.error();
     }
+    INJECT_PRELOAD(session_, envp);
+    auto run_res = linker_.execve(executable_res.value(), argv, envp);
+    if(!run_res.has_value()) {
+        recorder_.writeErr(run_res.error());
+    }
+    LOGGING_CMD(executable_res.value(), argv);
+    return run_res.value();
 }
 
-std::expected<int, int> Executor::execvpe(const char* file,
-                                          char* const* argv,
-                                          char* const* envp) const {
+int Executor::execvpe(const char* file, char* const* argv, char* const* envp) {
+    INIT_EXEC();
+    CHECK_SESSION(session_);
+    CHECK_POINTER(file);
+    auto executable_res = resolver_.from_path(file, const_cast<const char**>(envp));
+    if(!executable_res.has_value()) {
+        return executable_res.error();
+    }
+
+    INJECT_PRELOAD(session_, envp);
+    auto run_res = linker_.execve(executable_res.value(), argv, envp);
+    if(!run_res.has_value()) {
+        recorder_.writeErr(run_res.error());
+    }
+    LOGGING_CMD(executable_res.value(), argv);
+    return run_res.value();
+}
+
+int Executor::execvP(const char* file,
+                     const char* search_path,
+                     char* const* argv,
+                     char* const* envp) {
+    INIT_EXEC();
     CHECK_SESSION(session_);
     CHECK_POINTER(file);
 
-    if(auto executable = resolver_.from_path(file, const_cast<const char**>(envp));
-       executable.has_value()) {
-        if(inject_preload(session_, envp) != 0) {
-            // TODO
-        }
-        return linker_.execve(executable.value(), argv, envp);
-    } else {
-        return std::unexpected(executable.error());
+    auto executable_res = resolver_.from_search_path(file, search_path);
+    if(!executable_res.has_value()) {
+        return executable_res.error();
     }
+    INJECT_PRELOAD(session_, envp);
+    auto run_res = linker_.execve(executable_res.value(), argv, envp);
+    if(!run_res.has_value()) {
+        recorder_.writeErr(run_res.error());
+    }
+    LOGGING_CMD(executable_res.value(), argv);
+    return run_res.value();
 }
 
-std::expected<int, int> Executor::execvP(const char* file,
-                                         const char* search_path,
-                                         char* const* argv,
-                                         char* const* envp) const {
-    CHECK_SESSION(session_);
-    CHECK_POINTER(file);
-
-    if(auto executable = resolver_.from_search_path(file, search_path); executable.has_value()) {
-        if(inject_preload(session_, envp) != 0) {
-            // TODO
-        }
-        return linker_.execve(executable.value(), argv, envp);
-    } else {
-        return std::unexpected(executable.error());
-    }
-}
-
-std::expected<int, int> Executor::posix_spawn(pid_t* pid,
-                                              const char* path,
-                                              const posix_spawn_file_actions_t* file_actions,
-                                              const posix_spawnattr_t* attrp,
-                                              char* const* argv,
-                                              char* const* envp) const {
+int Executor::posix_spawn(pid_t* pid,
+                          const char* path,
+                          const posix_spawn_file_actions_t* file_actions,
+                          const posix_spawnattr_t* attrp,
+                          char* const* argv,
+                          char* const* envp) {
+    INIT_EXEC();
     CHECK_SESSION(session_);
     CHECK_POINTER(path);
 
-    if(auto executable = resolver_.from_current_directory(path); executable.value()) {
-        if(inject_preload(session_, envp) != 0) {
-            // TODO
-        }
-        return linker_.posix_spawn(pid, executable.value(), file_actions, attrp, argv, envp);
-    } else {
-        return std::unexpected(executable.error());
+    auto executable_res = resolver_.from_current_directory(path);
+    if(!executable_res.has_value()) {
+        return executable_res.error();
     }
+    INJECT_PRELOAD(session_, envp);
+    auto run_res =
+        linker_.posix_spawn(pid, executable_res.value(), file_actions, attrp, argv, envp);
+    if(!run_res.has_value()) {
+        recorder_.writeErr(run_res.error());
+    }
+    LOGGING_CMD(executable_res.value(), argv);
+    return run_res.value();
 }
 
-std::expected<int, int> Executor::posix_spawnp(pid_t* pid,
-                                               const char* file,
-                                               const posix_spawn_file_actions_t* file_actions,
-                                               const posix_spawnattr_t* attrp,
-                                               char* const* argv,
-                                               char* const* envp) const {
+int Executor::posix_spawnp(pid_t* pid,
+                           const char* file,
+                           const posix_spawn_file_actions_t* file_actions,
+                           const posix_spawnattr_t* attrp,
+                           char* const* argv,
+                           char* const* envp) {
+    INIT_EXEC();
     CHECK_SESSION(session_);
     CHECK_POINTER(file);
 
-    if(auto executable = resolver_.from_path(file, const_cast<const char**>(envp));
-       executable.has_value()) {
-        if(inject_preload(session_, envp) != 0) {
-            // TODO
-        }
-        return linker_.posix_spawn(pid, executable.value(), file_actions, attrp, argv, envp);
-    } else {
-        return std::unexpected(executable.error());
+    auto executable_res = resolver_.from_path(file, const_cast<const char**>(envp));
+    if(!executable_res.has_value()) {
+        return executable_res.error();
     }
+    INJECT_PRELOAD(session_, envp);
+    auto run_res =
+        linker_.posix_spawn(pid, executable_res.value(), file_actions, attrp, argv, envp);
+    if(!run_res.has_value()) {
+        recorder_.writeErr(run_res.error());
+    }
+    LOGGING_CMD(executable_res.value(), argv);
+    return run_res.value();
 }
 }  // namespace catter
 

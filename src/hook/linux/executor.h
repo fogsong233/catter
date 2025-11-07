@@ -1,8 +1,8 @@
 
+#include "io.h"
 #include "linker.h"
 #include "resolver.h"
 #include "session.h"
-#include <expected>
 
 namespace catter {
 
@@ -25,37 +25,38 @@ namespace catter {
  */
 class Executor {
 public:
-    Executor(const Linker& linker, const Session& session_, Resolver& resolver) noexcept;
+    Executor(const Linker& linker,
+             const Session& session,
+             Resolver& resolver,
+             Recorder recorder) noexcept;
 
     ~Executor() noexcept = default;
 
 public:
-    std::expected<int, int> execve(const char* path, char* const argv[], char* const envp[]) const;
+    int execve(const char* path, char* const argv[], char* const envp[]);
 
-    std::expected<int, int> execvpe(const char* file, char* const argv[], char* const envp[]) const;
+    int execvpe(const char* file, char* const argv[], char* const envp[]);
 
-    std::expected<int, int> execvP(const char* file,
-                                   const char* search_path,
-                                   char* const argv[],
-                                   char* const envp[]) const;
+    int execvP(const char* file, const char* search_path, char* const argv[], char* const envp[]);
 
-    std::expected<int, int> posix_spawn(pid_t* pid,
-                                        const char* path,
-                                        const posix_spawn_file_actions_t* file_actions,
-                                        const posix_spawnattr_t* attrp,
-                                        char* const argv[],
-                                        char* const envp[]) const;
+    int posix_spawn(pid_t* pid,
+                    const char* path,
+                    const posix_spawn_file_actions_t* file_actions,
+                    const posix_spawnattr_t* attrp,
+                    char* const argv[],
+                    char* const envp[]);
 
-    std::expected<int, int> posix_spawnp(pid_t* pid,
-                                         const char* file,
-                                         const posix_spawn_file_actions_t* file_actions,
-                                         const posix_spawnattr_t* attrp,
-                                         char* const argv[],
-                                         char* const envp[]) const;
+    int posix_spawnp(pid_t* pid,
+                     const char* file,
+                     const posix_spawn_file_actions_t* file_actions,
+                     const posix_spawnattr_t* attrp,
+                     char* const argv[],
+                     char* const envp[]);
 
 private:
     const catter::Linker& linker_;
     const catter::Session& session_;
+    catter::Recorder recorder_;
     catter::Resolver& resolver_;
 };
 }  // namespace catter
