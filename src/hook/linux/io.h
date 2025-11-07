@@ -7,15 +7,16 @@
 namespace catter {
 class Recorder {
 public:
-    Recorder() = delete;
-
-    explicit Recorder(const char* dir) noexcept;
+    Recorder() noexcept = default;
     virtual ~Recorder() noexcept;
 
     virtual int write(std::initializer_list<const char*> data) noexcept;
     virtual int writeErr(const char* data) noexcept;
     virtual int writeCmd(const char* data) noexcept;
     virtual bool valid() noexcept;
+
+public:
+    static void build(Recorder& recorder, const char* dir_path) noexcept;
 
 protected:
     const char* getFilePath() noexcept;

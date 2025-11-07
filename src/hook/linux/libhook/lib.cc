@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include "io.h"
 #include "linker.h"
 #include "session.h"
 #include "resolver.h"
@@ -81,6 +82,7 @@ std::atomic<bool> LOADED(false);
 // These are related to the functionality of this library.
 catter::Linker LINKER;
 catter::Session SESSION;
+catter::Recorder RECORDER;
 
 }  // namespace
 
@@ -102,6 +104,7 @@ extern "C" void on_load() {
     // TODO: initialization code here
     ct::session::from(SESSION, environment());
     catter::session::persist(SESSION, BUFFER, BUFFER + BUFFER_SIZE);
+    ct::Recorder::build(RECORDER, SESSION.log_path);
 
     errno = 0;
 }
@@ -127,28 +130,41 @@ extern "C" void on_unload() {
 
 extern "C" int execve(const char* path, char* const argv[], char* const envp[]) {
     ct::Resolver resolver;
-    const auto result = ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
-    if(!result.has_value()) {
-        errno = result.error();
-    }
-    return result.value_or(-1);
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
-extern "C" int execv(const char* path, char* const argv[]) {}
+extern "C" int execv(const char* path, char* const argv[]) {
+    ct::Resolver resolver;
+    auto envp = const_cast<char* const*>(environment());
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+}
 
-extern "C" int execvpe(const char* file, char* const argv[], char* const envp[]) {}
+extern "C" int execvpe(const char* file, char* const argv[], char* const envp[]) {
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
+}
 
-extern "C" int execvp(const char* file, char* const argv[]) {}
+extern "C" int execvp(const char* file, char* const argv[]) {
+    ct::Resolver resolver;
+    auto envp = const_cast<char* const*>(environment());
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
+}
 
-extern "C" int execvP(const char* file, const char* search_path, char* const argv[]) {}
+extern "C" int execvP(const char* file, const char* search_path, char* const argv[]) {
+    ct::Resolver resolver;
+    auto envp = const_cast<char* const*>(environment());
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvP(file, search_path, argv, envp);
+}
 
-extern "C" int exect(const char* path, char* const argv[], char* const envp[]) {}
+extern "C" int exect(const char* path, char* const argv[], char* const envp[]) {
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wvla"
 
 extern "C" int execl(const char* path, const char* arg, ...) {
-    printf("execl path: %s", path);
 
     // Count the number of arguments.
     va_list ap;
@@ -163,6 +179,8 @@ extern "C" int execl(const char* path, const char* arg, ...) {
     va_end(ap);
 
     auto envp = const_cast<char* const*>(environment());
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
 extern "C" int execlp(const char* file, const char* arg, ...) {
@@ -180,6 +198,8 @@ extern "C" int execlp(const char* file, const char* arg, ...) {
     va_end(ap);
 
     auto envp = const_cast<char* const*>(environment());
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
 }
 
 // int execle(const char *path, const char *arg, ..., char * const envp[]);
@@ -197,6 +217,9 @@ extern "C" int execle(const char* path, const char* arg, ...) {
     va_copy_n(ap, &argv[1], argc + 1);
     char** envp = va_arg(ap, char**);
     va_end(ap);
+
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
 #pragma GCC diagnostic pop
@@ -206,11 +229,19 @@ extern "C" int posix_spawn(pid_t* pid,
                            const posix_spawn_file_actions_t* file_actions,
                            const posix_spawnattr_t* attrp,
                            char* const argv[],
-                           char* const envp[]) {}
+                           char* const envp[]) {
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER)
+        .posix_spawn(pid, path, file_actions, attrp, argv, envp);
+}
 
 extern "C" int posix_spawnp(pid_t* pid,
                             const char* file,
                             const posix_spawn_file_actions_t* file_actions,
                             const posix_spawnattr_t* attrp,
                             char* const argv[],
-                            char* const envp[]) {}
+                            char* const envp[]) {
+    ct::Resolver resolver;
+    return ct::Executor(LINKER, SESSION, resolver, RECORDER)
+        .posix_spawnp(pid, file, file_actions, attrp, argv, envp);
+}

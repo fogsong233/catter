@@ -10,7 +10,7 @@ class Buffer;
  * It does not own the memory (of the pointed areas).
  */
 struct Session {
-    const char* log_file = nullptr;
+    const char* log_path = nullptr;
     const char* self_lib_path = nullptr;
 };
 

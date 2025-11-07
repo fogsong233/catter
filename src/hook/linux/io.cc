@@ -35,18 +35,18 @@ int push_num(int num, char*& it, const char* end) {
 }  // namespace
 
 namespace catter {
-Recorder::Recorder(const char* dir) noexcept : dir_() {
+void Recorder::build(Recorder& recorder, const char* dir) noexcept {
     if(dir == nullptr || dir[0] == '\0') {
-        dir_[0] = '\0';
-        file_name_index_ = nullptr;
+        recorder.dir_[0] = '\0';
+        recorder.file_name_index_ = nullptr;
         return;
     }
     auto dir_sz = array::length(dir);
-    catter::array::copy(dir, dir_sz + dir, dir_, dir_ + dir_sz_);
-    file_name_index_ = dir_ + dir_sz;
-    if(*(file_name_index_ - 1) != config::OS_DIR_SEPARATOR) {
-        *file_name_index_ = config::OS_DIR_SEPARATOR;
-        file_name_index_++;
+    catter::array::copy(dir, dir_sz + dir, recorder.dir_, recorder.dir_ + recorder.dir_sz_);
+    recorder.file_name_index_ = recorder.dir_ + dir_sz;
+    if(*(recorder.file_name_index_ - 1) != config::OS_DIR_SEPARATOR) {
+        *recorder.file_name_index_ = config::OS_DIR_SEPARATOR;
+        recorder.file_name_index_++;
     }
 }
 
