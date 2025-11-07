@@ -111,7 +111,7 @@ int run(std::span<const char* const> command, std::error_code& ec) {
     return static_cast<int>(exit_code);
 }
 
-static std::expected<std::vector<std::string>, std::string> collect_all() {
+std::expected<std::vector<std::string>, std::string> collect_all() {
     std::vector<std::string> result;
 
     std::error_code ec;
