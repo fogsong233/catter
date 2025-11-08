@@ -3,8 +3,11 @@
 #include <fstream>
 #include <filesystem>
 #include <mutex>
+#include <print>
+#include <thread>
 
 #include "common.h"
+#include "hook/windows/env.h"
 
 namespace {
 
