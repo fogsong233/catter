@@ -23,15 +23,7 @@ if is_plat("windows") then
 end
 
 if is_plat("linux") then
-    target("catter-hook-linux")
-        set_kind("shared")
-        add_includedirs("src/hook/linux/libhook")
-        add_files("src/hook/linux/libhook/*.cc")
-        add_files("src/hook/linux/libhook/inject/*.cc")
-        add_syslinks("dl")
-        if is_mode("debug") then
-            add_defines("DEBUG")
-        end
+  includes("src/hook/linux")
 end
 
 

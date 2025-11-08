@@ -17,6 +17,8 @@
 #include <dlfcn.h>
 #include <spawn.h>
 
+#define EXPORT_SYMBOL __attribute__((visibility("default")))
+
 namespace {
 
 /// helper for hook c function with var args
@@ -95,9 +97,9 @@ catter::Recorder RECORDER;
 
 namespace ct = catter;
 
-extern "C" void on_load() __attribute__((constructor));
+extern "C" EXPORT_SYMBOL void on_load() __attribute__((constructor));
 
-extern "C" void on_load() {
+extern "C" EXPORT_SYMBOL void on_load() {
     // Test whether on_load was called already.
     if(LOADED.exchange(true))
         return;
@@ -115,9 +117,9 @@ extern "C" void on_load() {
  *
  * The last method which needs to be called when the library is unloaded.
  */
-extern "C" void on_unload() __attribute__((destructor));
+extern "C" EXPORT_SYMBOL void on_unload() __attribute__((destructor));
 
-extern "C" void on_unload() {
+extern "C" EXPORT_SYMBOL void on_unload() {
     // Test whether on_unload was called already.
     if(not LOADED.exchange(false))
         return;
@@ -129,36 +131,36 @@ extern "C" void on_unload() {
 
 // TODO: implement hooked functions below
 
-extern "C" int execve(const char* path, char* const argv[], char* const envp[]) {
+extern "C" EXPORT_SYMBOL int execve(const char* path, char* const argv[], char* const envp[]) {
     ct::Resolver resolver;
     INFO("hooked execve called: path={}, argv[0]={}", path, argv[0]);
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
-extern "C" int execv(const char* path, char* const argv[]) {
+extern "C" EXPORT_SYMBOL int execv(const char* path, char* const argv[]) {
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
-extern "C" int execvpe(const char* file, char* const argv[], char* const envp[]) {
+extern "C" EXPORT_SYMBOL int execvpe(const char* file, char* const argv[], char* const envp[]) {
     ct::Resolver resolver;
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
 }
 
-extern "C" int execvp(const char* file, char* const argv[]) {
+extern "C" EXPORT_SYMBOL int execvp(const char* file, char* const argv[]) {
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
 }
 
-extern "C" int execvP(const char* file, const char* search_path, char* const argv[]) {
+extern "C" EXPORT_SYMBOL int execvP(const char* file, const char* search_path, char* const argv[]) {
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvP(file, search_path, argv, envp);
 }
 
-extern "C" int exect(const char* path, char* const argv[], char* const envp[]) {
+extern "C" EXPORT_SYMBOL int exect(const char* path, char* const argv[], char* const envp[]) {
     ct::Resolver resolver;
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
@@ -166,7 +168,7 @@ extern "C" int exect(const char* path, char* const argv[], char* const envp[]) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wvla"
 
-extern "C" int execl(const char* path, const char* arg, ...) {
+extern "C" EXPORT_SYMBOL int execl(const char* path, const char* arg, ...) {
 
     // Count the number of arguments.
     va_list ap;
@@ -185,7 +187,7 @@ extern "C" int execl(const char* path, const char* arg, ...) {
     return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
 }
 
-extern "C" int execlp(const char* file, const char* arg, ...) {
+extern "C" EXPORT_SYMBOL int execlp(const char* file, const char* arg, ...) {
 
     // Count the number of arguments.
     va_list ap;
@@ -205,7 +207,7 @@ extern "C" int execlp(const char* file, const char* arg, ...) {
 }
 
 // int execle(const char *path, const char *arg, ..., char * const envp[]);
-extern "C" int execle(const char* path, const char* arg, ...) {
+extern "C" EXPORT_SYMBOL int execle(const char* path, const char* arg, ...) {
 
     // Count the number of arguments.
     va_list ap;
@@ -226,23 +228,23 @@ extern "C" int execle(const char* path, const char* arg, ...) {
 
 #pragma GCC diagnostic pop
 
-extern "C" int posix_spawn(pid_t* pid,
-                           const char* path,
-                           const posix_spawn_file_actions_t* file_actions,
-                           const posix_spawnattr_t* attrp,
-                           char* const argv[],
-                           char* const envp[]) {
+extern "C" EXPORT_SYMBOL int posix_spawn(pid_t* pid,
+                                         const char* path,
+                                         const posix_spawn_file_actions_t* file_actions,
+                                         const posix_spawnattr_t* attrp,
+                                         char* const argv[],
+                                         char* const envp[]) {
     ct::Resolver resolver;
     return ct::Executor(LINKER, SESSION, resolver, RECORDER)
         .posix_spawn(pid, path, file_actions, attrp, argv, envp);
 }
 
-extern "C" int posix_spawnp(pid_t* pid,
-                            const char* file,
-                            const posix_spawn_file_actions_t* file_actions,
-                            const posix_spawnattr_t* attrp,
-                            char* const argv[],
-                            char* const envp[]) {
+extern "C" EXPORT_SYMBOL int posix_spawnp(pid_t* pid,
+                                          const char* file,
+                                          const posix_spawn_file_actions_t* file_actions,
+                                          const posix_spawnattr_t* attrp,
+                                          char* const argv[],
+                                          char* const envp[]) {
     ct::Resolver resolver;
     return ct::Executor(LINKER, SESSION, resolver, RECORDER)
         .posix_spawnp(pid, file, file_actions, attrp, argv, envp);
