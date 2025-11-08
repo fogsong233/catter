@@ -3,6 +3,9 @@
 #include <string>
 #include <ranges>
 #include <system_error>
+#include <span>
+#include <fstream>
+#include <filesystem>
 
 #include <vector>
 #include <windows.h>
