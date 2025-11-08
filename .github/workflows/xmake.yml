@@ -29,6 +29,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup GCC 12 (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install gcc-12 g++-12
+
+      - name: Show GCC version and STL details
+        run: |
+          gcc --version
+          echo "GCC verbose information:"
+          g++ -v
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
@@ -38,12 +50,16 @@ jobs:
           package-cache: true
           package-cache-key: ${{ matrix.os }}
 
+      - name: Clean xmake cache
+        run: |
+          rm -rf .xmake-cache
+
       - name: Build (Release)
         run: |
-          xmake config --clean --yes --mode=release
+          xmake f --cppstd=c++23 --clean --yes --mode=release
           xmake --verbose --diagnosis
 
       - name: Build (Debug)
         run: |
-          xmake config --clean --yes --mode=debug
+          xmake f --cppstd=c++23 --clean --yes --mode=debug
           xmake --verbose --diagnosis
