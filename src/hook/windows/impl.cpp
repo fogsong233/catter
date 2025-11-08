@@ -3,13 +3,15 @@
 #include <string>
 #include <ranges>
 #include <system_error>
-
+#include <filesystem>
 #include <vector>
 #include <windows.h>
 #include <detours.h>
 
 #include "hook/interface.h"
 #include "hook/windows/env.h"
+
+namespace fs = std::filesystem;
 
 namespace catter::hook {
 namespace detail {
