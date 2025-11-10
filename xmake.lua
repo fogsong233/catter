@@ -28,7 +28,7 @@ if is_mode("debug") then
 end
 
 -- platform macros
-if is_plat("linux") then 
+if is_plat("linux") then
     add_defines("CATTER_LINUX")
 elseif is_plat("macosx") then
     add_defines("CATTER_MAC")

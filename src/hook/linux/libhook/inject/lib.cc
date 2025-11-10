@@ -283,4 +283,3 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(posix_spawnp)(pid_t* pid,
 }
 
 INJECT_FUNCTION(posix_spawnp);
-
