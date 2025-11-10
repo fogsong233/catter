@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <system_error>
 #include <unistd.h>
+#include <array>
+#include <limits.h>
 #include <stdint.h>
 
 #ifdef CATTER_LINUX
