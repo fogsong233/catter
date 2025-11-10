@@ -21,7 +21,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-2025, ubuntu-24.04]
+        os: [windows-2025, ubuntu-24.04, macos-15]
 
     concurrency:
       group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
@@ -51,6 +51,14 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
+
+      - name: Setup clang
+        if: matrix.os == 'macos-15'
+        run: |
+          brew install llvm
+          echo "::add-path::$(brew --prefix llvm)/bin"
+          echo "Clang version:"
+          clang --version
 
       - name: Build (Release)
         run: |
