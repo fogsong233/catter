@@ -66,7 +66,7 @@ inline std::string get_executable_path(std::error_code& ec) {
 #elif defined(CATTER_MAC)
     uint32_t size = buf.size();
     if(_NSGetExecutablePath(buf.data(), &size) != 0) {
-        ec = std::error_code(errno, std::generic_category());
+        ec = std::error_code(ERANGE, std::generic_category());
         return {};
     }
 #endif
