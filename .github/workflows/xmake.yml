@@ -22,6 +22,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-2025, ubuntu-24.04, macos-15]
+        build_type: [release, debug]
 
     concurrency:
       group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
@@ -52,20 +53,19 @@ jobs:
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
 
-      - name: Setup clang
+      - name: Setup llvm
         if: matrix.os == 'macos-15'
         run: |
           brew install llvm@20
-          echo "Adding llvm@20 to PATH"
-          export PATH="/opt/homebrew/opt/llvm@20/bin:/opt/homebrew/opt/lld@20/bin:$PATH"
-          clang --version
 
-      - name: Build (Release)
+      - name: Xmake configure for macos
+        if: matrix.os == 'macos-15'
         run: |
-          xmake config --clean --yes --mode=release
+          xmake config --yes --ci=y --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
           xmake --verbose --diagnosis
 
-      - name: Build (Debug)
+      - name: Xmake configure for linux, windows
+        if: matrix.os != 'macos-15'
         run: |
-          xmake config --clean --yes --mode=debug
+          xmake config --yes --ci=y --mode=${{ matrix.build_type }}
           xmake --verbose --diagnosis

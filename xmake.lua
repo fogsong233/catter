@@ -3,9 +3,6 @@ set_project("catter")
 add_rules("mode.debug", "mode.release")
 set_allowedplats("windows", "linux", "macosx")
 
-if is_plat("macosx") then
-    set_toolchains("clang")
-end
 
 set_languages("c++23")
 
@@ -24,10 +21,9 @@ if (is_plat("linux") or is_plat("macosx")) then
 end
 
 if is_mode("debug") then
-        add_defines("DEBUG")
+    add_defines("DEBUG")
 end
 
--- platform macros
 if is_plat("linux") then
     add_defines("CATTER_LINUX")
 elseif is_plat("macosx") then
@@ -47,15 +43,10 @@ target("catter")
     add_includedirs("src")
     add_files("src/main.cpp")
     if is_plat("windows") then
+        add_packages("microsoft-detours")
         add_files("src/hook/windows/impl.cpp")
     elseif is_plat("linux") then
-        add_defines("CATTER_LINUX")
         add_files("src/hook/linux/*.cc")
     elseif is_plat("macosx") then
-        add_defines("CATTER_MAC")
         add_files("src/hook/linux/*.cc")
-    end
-
-    if is_plat("windows") then
-        add_packages("microsoft-detours")
     end
