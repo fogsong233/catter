@@ -44,7 +44,6 @@ static const char** environment() noexcept {
 }
 
 #include <string>
-#include <vector>
 
 #ifdef CATTER_LINUX
 #include <unistd.h>
@@ -82,7 +81,7 @@ inline std::string get_executable_path() {
     }
     buf[len] = '\0';
 #elif defined(CATTER_MAC)
-    uint32_t size = buf.size();
+    int size = buf.size();
     if(_NSGetExecutablePath(buf.data(), &size) != 0) {
         return {};
     }
