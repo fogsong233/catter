@@ -81,7 +81,7 @@ inline std::string get_executable_path() {
     }
     buf[len] = '\0';
 #elif defined(CATTER_MAC)
-    int size = buf.size();
+    uint32_t size = buf.size();
     if(_NSGetExecutablePath(buf.data(), &size) != 0) {
         return {};
     }
