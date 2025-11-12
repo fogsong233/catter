@@ -16,7 +16,7 @@ if is_plat("windows") then
     add_requires("microsoft-detours")
 end
 
-if (is_plat("linux") or is_plat("macosx")) then
+if (is_plat("linux", "macosx")) then
     includes("src/hook/linux")
 end
 

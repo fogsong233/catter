@@ -34,9 +34,9 @@ extern char** environ;
 #endif
 
 static const char** environment() noexcept {
-#if CATTER_MAC
+#if defined(CATTER_MAC)
     return const_cast<const char**>(*_NSGetEnviron());
-#elif CATTER_LINUX
+#elif defined(CATTER_LINUX)
     return const_cast<const char**>(environ);
 #else
 #error "Unsupported platform"
@@ -56,14 +56,14 @@ static const char** environment() noexcept {
 
 inline std::string get_executable_path(std::error_code& ec) {
     std::array<char, PATH_MAX> buf;
-#ifdef CATTER_LINUX
+#if defined(CATTER_LINUX)
     ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
     if(len <= 0) {
         ec = std::error_code(errno, std::generic_category());
         return {};
     }
     buf[len] = '\0';
-#elif defined(__APPLE__)
+#elif defined(CATTER_MAC)
     uint32_t size = buf.size();
     if(_NSGetExecutablePath(buf.data(), &size) != 0) {
         ec = std::error_code(errno, std::generic_category());
@@ -75,13 +75,13 @@ inline std::string get_executable_path(std::error_code& ec) {
 
 inline std::string get_executable_path() {
     std::array<char, PATH_MAX> buf;
-#ifdef CATTER_LINUX
+#if defined(CATTER_LINUX)
     ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
     if(len <= 0) {
         return {};
     }
     buf[len] = '\0';
-#elif defined(__APPLE__)
+#elif defined(CATTER_MAC)
     uint32_t size = buf.size();
     if(_NSGetExecutablePath(buf.data(), &size) != 0) {
         return {};
@@ -90,7 +90,7 @@ inline std::string get_executable_path() {
     return std::string(buf.data());
 }
 
-#ifdef CATTER_MAC
+#if defined(CATTER_MAC)
 #ifndef DYLD_INTERPOSE
 #define DYLD_INTERPOSE(_replacement, _replacee)                                                    \
     __attribute__((used)) static struct {                                                          \
@@ -100,7 +100,7 @@ inline std::string get_executable_path() {
         (const void*)(unsigned long)&_replacement,                                                 \
         (const void*)(unsigned long)&_replacee};
 #endif
-#elif CATTER_LINUX
+#elif defined(CATTER_LINUX)
 #define DYLD_INTERPOSE(_replacement, _replacee)
 #else
 #error "Unsupported platform"
