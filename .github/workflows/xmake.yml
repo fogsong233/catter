@@ -61,11 +61,11 @@ jobs:
       - name: Xmake configure for macos
         if: matrix.os == 'macos-15'
         run: |
-          xmake config --yes --ci=y --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
+          xmake config --clean --yes --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
           xmake --verbose --diagnosis
 
       - name: Xmake configure for linux, windows
         if: matrix.os != 'macos-15'
         run: |
-          xmake config --yes --ci=y --mode=${{ matrix.build_type }}
+          xmake config --clean --yes --mode=${{ matrix.build_type }}
           xmake --verbose --diagnosis
