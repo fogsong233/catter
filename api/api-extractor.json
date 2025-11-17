@@ -18,5 +18,8 @@
     "extractorMessageReporting": {
       "ae-missing-release-tag": { "logLevel": "none" }
     }
+  },
+  "tsdocMetadata": {
+    "enabled": false
   }
 }

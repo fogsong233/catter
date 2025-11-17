@@ -1,10 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
-  "tsBuildInfoFile": "./build/.tsbuildinfo",
-  "tsdocMetadata": {
-    "enabled": false,
-  },
   "compilerOptions": {
+    "tsBuildInfoFile": "./build/.tsbuildinfo",
     "module": "esnext",
     "rootDir": "./src",
     "outDir": "./output/lib",

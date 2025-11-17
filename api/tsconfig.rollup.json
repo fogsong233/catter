@@ -1,6 +1,6 @@
 {
-  "tsBuildInfoFile": "./build/.tsbuildinfo",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "tsBuildInfoFile": "./build/.tsbuildinfo",
   }
 }
