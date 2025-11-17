@@ -30,7 +30,7 @@ jobs:
         node-version: [18.x, 20.x]
 
     concurrency:
-      group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
+      group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.node-version }}
       cancel-in-progress: true
 
     runs-on: ubuntu-latest
