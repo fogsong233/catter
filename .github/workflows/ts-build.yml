@@ -51,5 +51,5 @@ jobs:
        - name: Install dependencies
          run: pnpm install
 
-       - name: Build Project
-         run: pnpm run build
+       - name: Build Project Catter-Runtime-Api
+         run: pnpm --filter ./api run build-release
