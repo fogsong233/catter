@@ -1,0 +1,6 @@
+{
+  "tsBuildInfoFile": "./build/.tsbuildinfo",
+  "compilerOptions": {
+    "noEmit": true
+  }
+}
