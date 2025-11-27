@@ -15,4 +15,15 @@ const char* Buffer::store(const char* const input) noexcept {
     return top;
 }
 
+bool Buffer::push(const char* const input) noexcept {
+    if(input == nullptr)
+        return false;
+
+    const auto input_end = catter::array::end(input);  // do not include the zero element
+    auto top = catter::array::copy(input, input_end, top_, end_);
+    if(top != nullptr)
+        std::swap(top_, top);
+    return top != nullptr;
+}
+
 }  // namespace catter

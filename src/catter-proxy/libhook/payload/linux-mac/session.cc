@@ -1,28 +1,26 @@
 #include "session.h"
 
 #include "buffer.h"
-#include "debug.h"
+#include "libhook/linux-mac/debug.h"
 #include "environment.h"
-#include "libhook/linux-mac/config.h"
+#include "libconfig/linux-mac-hook.h"
 
 namespace catter::session {
 
 void from(Session& session, const char** environment) noexcept {
-    session.log_path = catter::env::get_env_value(environment, config::KEY_CMD_LOG_FILE);
-    session.self_lib_path =
-        catter::env::get_env_value(environment, config::KEY_CATTER_PRELOAD_PATH);
+    session.proxy_path =
+        catter::env::get_env_value(environment, config::hook::KEY_CATTER_PROXY_PATH);
+    session.self_id = catter::env::get_env_value(environment, config::hook::KEY_CATTER_COMMAND_ID);
     if(!is_valid(session)) {
         WARN("session is invalid");
         return;
     }
     session.necessary_envp_entry[0] =
-        catter::env::get_env_entry(environment, config::KEY_CMD_LOG_FILE);
+        catter::env::get_env_entry(environment, config::hook::KEY_CATTER_PROXY_PATH);
     session.necessary_envp_entry[1] =
-        catter::env::get_env_entry(environment, config::KEY_CATTER_PRELOAD_PATH);
+        catter::env::get_env_entry(environment, config::hook::KEY_CATTER_COMMAND_ID);
 
-    INFO("session from env: log_path={}, self_lib_path={}",
-         session.log_path,
-         session.self_lib_path);
+    INFO("session from env: catter_proxy={}, self_id={}", session.proxy_path, session.self_id);
 }
 
 void persist(Session& session, char* begin, char* end) noexcept {
@@ -30,13 +28,13 @@ void persist(Session& session, char* begin, char* end) noexcept {
         return;
 
     Buffer buffer(begin, end);
-    session.log_path = buffer.store(session.log_path);
-    session.self_lib_path = buffer.store(session.self_lib_path);
+    session.proxy_path = buffer.store(session.proxy_path);
+    session.self_id = buffer.store(session.self_id);
     session.necessary_envp_entry[0] = buffer.store(session.necessary_envp_entry[0]);
     session.necessary_envp_entry[1] = buffer.store(session.necessary_envp_entry[1]);
 }
 
 bool is_valid(const Session& session) noexcept {
-    return (session.log_path != nullptr && session.self_lib_path != nullptr);
+    return (session.proxy_path != nullptr && session.self_id != nullptr);
 }
 }  // namespace catter::session

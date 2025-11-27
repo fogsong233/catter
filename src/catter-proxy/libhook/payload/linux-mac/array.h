@@ -1,6 +1,5 @@
 #pragma once
 
-#include "debug.h"
 #include <cstddef>
 
 namespace catter::array {

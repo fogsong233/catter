@@ -13,6 +13,10 @@ if is_plat("windows") then
 elseif is_plat("linux", "macosx") then
     target("catter-hook-unix")
         set_kind("shared")
+        if is_mode("debug") then
+            add_deps("libutil")
+        end
+        add_deps("libconfig")
         add_includedirs("include")
         add_includedirs("payload/linux-mac")
         add_files("payload/linux-mac/*.cc")
@@ -22,11 +26,15 @@ elseif is_plat("linux", "macosx") then
             add_cxxflags("-fvisibility=hidden")
             add_cxxflags("-nostdlib++")
         end
+
 end
 
 
 target("libhook")
     set_kind("static")
+    add_deps("librpc")
+    add_deps("libutil")
+    add_deps("libconfig")
     add_includedirs("include", {public = true})
     if is_plat("windows") then
         add_files("src/win-impl.cc")
@@ -34,5 +42,3 @@ target("libhook")
     elseif is_plat("linux", "macosx") then
         add_files("src/linux-mac-impl.cc")
     end
-
-    add_deps("librpc")

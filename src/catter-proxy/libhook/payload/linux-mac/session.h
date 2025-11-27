@@ -10,8 +10,10 @@ class Buffer;
  * It does not own the memory (of the pointed areas).
  */
 struct Session {
-    const char* log_path = nullptr;
-    const char* self_lib_path = nullptr;
+    /// we execute proxy_path instead of cmd
+    const char* proxy_path = nullptr;
+    /// we pass self_id to proxy_path
+    const char* self_id = nullptr;
     const char* necessary_envp_entry[2] = {nullptr, nullptr};
 };
 

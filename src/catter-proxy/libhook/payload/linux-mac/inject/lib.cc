@@ -1,13 +1,13 @@
 #include <cstdlib>
 #define _GNU_SOURCE
 
-#include "io.h"
 #include "linker.h"
 #include "session.h"
 #include "resolver.h"
 #include "executor.h"
-#include "debug.h"
+#include "libhook/linux-mac/debug.h"
 #include "libhook/linux-mac/crossplat.h"
+#include "libconfig/proxy.h"
 
 #include <limits.h>
 #include "unistd.h"
@@ -19,6 +19,14 @@
 #include <spawn.h>
 
 #define EXPORT_SYMBOL __attribute__((visibility("default")))
+
+#define IF_IN_PROXY(statement)                                                                     \
+    do {                                                                                           \
+        const char* in_proxy = getenv(catter::config::proxy::CATTER_PROXY_ENV_KEY);                \
+        if(in_proxy != nullptr) {                                                                  \
+            statement                                                                              \
+        }                                                                                          \
+    } while(false)
 
 namespace {
 
@@ -39,12 +47,20 @@ void va_copy_n(va_list& args, char* argv[], const size_t argc) {
 }  // namespace
 
 // dynamic linker
+namespace {
+template <typename T>
+T dynamic_linker(const char* const name) {
+    return reinterpret_cast<T>(dlsym(RTLD_NEXT, name));
+}
+}  // namespace
 
 /// function type we need hook
 using execve_t = int (*)(const char* path, char* const argv[], char* const envp[]);
 using execv_t = int (*)(const char* path, char* const argv[]);
 using execvpe_t = int (*)(const char* file, char* const argv[], char* const envp[]);
 using execvp_t = int (*)(const char* file, char* const argv[]);
+
+using execvP_t = int (*)(const char* file, const char* search_path, char* const argv[]);
 
 using execl_t = int (*)(const char* path, const char* arg, ...);
 using execlp_t = int (*)(const char* file, const char* arg, ...);
@@ -79,7 +95,6 @@ std::atomic<bool> LOADED(false);
 // These are related to the functionality of this library.
 catter::Linker LINKER;
 catter::Session SESSION;
-catter::Recorder RECORDER;
 
 }  // namespace
 
@@ -101,7 +116,6 @@ extern "C" EXPORT_SYMBOL void on_load() {
     // TODO: initialization code here
     ct::session::from(SESSION, environment());
     catter::session::persist(SESSION, BUFFER, BUFFER + BUFFER_SIZE);
-    ct::Recorder::build(RECORDER, SESSION.log_path);
 
     errno = 0;
 }
@@ -128,18 +142,20 @@ extern "C" EXPORT_SYMBOL void on_unload() {
 extern "C" EXPORT_SYMBOL int HOOK_NAME(execve)(const char* path,
                                                char* const argv[],
                                                char* const envp[]) {
+    IF_IN_PROXY(return dynamic_linker<execve_t>("execve")(path, argv, envp););
     ct::Resolver resolver;
     INFO("hooked execve called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
 }
 
 INJECT_FUNCTION(execve);
 
 extern "C" EXPORT_SYMBOL int HOOK_NAME(execv)(const char* path, char* const argv[]) {
+    IF_IN_PROXY(return dynamic_linker<execv_t>("execv")(path, argv););
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     INFO("hooked execv called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
 }
 
 INJECT_FUNCTION(execv);
@@ -147,9 +163,10 @@ INJECT_FUNCTION(execv);
 extern "C" EXPORT_SYMBOL int HOOK_NAME(execvpe)(const char* file,
                                                 char* const argv[],
                                                 char* const envp[]) {
+    IF_IN_PROXY(return dynamic_linker<execvpe_t>("execvpe")(file, argv, envp););
     ct::Resolver resolver;
     INFO("hooked execvpe called: file={}, argv[0]={}", file, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execvpe(file, argv, envp);
 }
 
 // INJECT_FUNCTION(execvpe);
@@ -158,7 +175,8 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(execvp)(const char* file, char* const arg
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     INFO("hooked execvp called: file={}, argv[0]={}", file, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
+    IF_IN_PROXY(return dynamic_linker<execvp_t>("execvp")(file, argv););
+    return ct::Executor(LINKER, SESSION, resolver).execvpe(file, argv, envp);
 }
 
 INJECT_FUNCTION(execvp);
@@ -166,10 +184,11 @@ INJECT_FUNCTION(execvp);
 extern "C" EXPORT_SYMBOL int HOOK_NAME(execvP)(const char* file,
                                                const char* search_path,
                                                char* const argv[]) {
+    IF_IN_PROXY(return dynamic_linker<execvP_t>("execvP")(file, search_path, argv););
     ct::Resolver resolver;
     auto envp = const_cast<char* const*>(environment());
     INFO("hooked execvP called: file={}, argv[0]={}", file, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvP(file, search_path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execvP(file, search_path, argv, envp);
 }
 
 INJECT_FUNCTION(execvP);
@@ -177,9 +196,10 @@ INJECT_FUNCTION(execvP);
 extern "C" EXPORT_SYMBOL int HOOK_NAME(exect)(const char* path,
                                               char* const argv[],
                                               char* const envp[]) {
+    IF_IN_PROXY(return dynamic_linker<execve_t>("execve")(path, argv, envp););
     ct::Resolver resolver;
     INFO("hooked exect called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
 }
 
 // INJECT_FUNCTION(exect);
@@ -202,9 +222,10 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(execl)(const char* path, const char* arg,
     va_end(ap);
 
     auto envp = const_cast<char* const*>(environment());
+    IF_IN_PROXY(return dynamic_linker<execve_t>("execve")(path, argv, envp););
     ct::Resolver resolver;
     INFO("hooked execl called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
 }
 
 INJECT_FUNCTION(execl);
@@ -224,9 +245,10 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(execlp)(const char* file, const char* arg
     va_end(ap);
 
     auto envp = const_cast<char* const*>(environment());
+    IF_IN_PROXY(return dynamic_linker<execvpe_t>("execvpe")(file, argv, envp););
     ct::Resolver resolver;
     INFO("hooked execlp called: file={}, argv[0]={}", file, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execvpe(file, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execvpe(file, argv, envp);
 }
 
 INJECT_FUNCTION(execlp);
@@ -247,9 +269,10 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(execle)(const char* path, const char* arg
     char** envp = va_arg(ap, char**);
     va_end(ap);
 
+    IF_IN_PROXY(return dynamic_linker<execve_t>("execve")(path, argv, envp););
     ct::Resolver resolver;
     INFO("hooked execle called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER).execve(path, argv, envp);
+    return ct::Executor(LINKER, SESSION, resolver).execve(path, argv, envp);
 }
 
 INJECT_FUNCTION(execle);
@@ -262,9 +285,11 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(posix_spawn)(pid_t* pid,
                                                     const posix_spawnattr_t* attrp,
                                                     char* const argv[],
                                                     char* const envp[]) {
+    IF_IN_PROXY(return dynamic_linker<posix_spawn_t>(
+                           "posix_spawn")(pid, path, file_actions, attrp, argv, envp););
     ct::Resolver resolver;
     INFO("hooked posix_spawn called: path={}, argv[0]={}", path, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER)
+    return ct::Executor(LINKER, SESSION, resolver)
         .posix_spawn(pid, path, file_actions, attrp, argv, envp);
 }
 
@@ -276,9 +301,11 @@ extern "C" EXPORT_SYMBOL int HOOK_NAME(posix_spawnp)(pid_t* pid,
                                                      const posix_spawnattr_t* attrp,
                                                      char* const argv[],
                                                      char* const envp[]) {
+    IF_IN_PROXY(return dynamic_linker<posix_spawnp_t>(
+                           "posix_spawnp")(pid, file, file_actions, attrp, argv, envp););
     ct::Resolver resolver;
     INFO("hooked posix_spawnp called: file={}, argv[0]={}", file, argv[0]);
-    return ct::Executor(LINKER, SESSION, resolver, RECORDER)
+    return ct::Executor(LINKER, SESSION, resolver)
         .posix_spawnp(pid, file, file_actions, attrp, argv, envp);
 }
 

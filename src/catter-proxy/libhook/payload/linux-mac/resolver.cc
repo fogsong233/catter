@@ -2,7 +2,7 @@
 
 #include "array.h"
 #include "environment.h"
-#include "libhook/linux-mac/config.h"
+#include "libconfig/linux-mac-hook.h"
 #include "paths.h"
 
 #include <algorithm>

@@ -1,69 +1,114 @@
 #include "libhook/interface.h"
-#include "libhook/linux-mac/config.h"
-#include "libhook/linux-mac/crossplat.h"
-#include <array>
-#include <expected>
+#include "libconfig/linux-mac-hook.h"
+#include "libconfig/proxy.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <limits.h>
-#include <print>
+#include "libconfig/linux-mac-hook.h"
+#include <spawn.h>
 #include <system_error>
 #include <unistd.h>
 #include <dirent.h>
-#include <vector>
+#include <sys/wait.h>
+#include "librpc/data.h"
+#include "libutil/crossplat.h"
+#include "libutil/log.h"
+
+/**
+ * @brief Run a command using posix_spawn
+ * @param command The command to run
+ * @return The exit code of the command
+ */
+static int run_command(const catter::rpc::data::command& command) {
+    std::vector<char*> argv_ptrs;
+    // add argv[0]
+    argv_ptrs.push_back(const_cast<char*>(command.executable.c_str()));
+    for(auto& arg: command.args) {
+        argv_ptrs.push_back(const_cast<char*>(arg.c_str()));
+    }
+    argv_ptrs.push_back(nullptr);
+
+    std::vector<char*> envp_ptrs;
+    for(auto& env: command.env) {
+        envp_ptrs.push_back(const_cast<char*>(env.c_str()));
+    }
+    envp_ptrs.push_back(nullptr);
+    pid_t pid = 0;
+    int spawn_res = posix_spawn(&pid,
+                                command.executable.c_str(),
+                                nullptr,  // file actions use parent
+                                nullptr,  // spawn attributes use parent
+                                argv_ptrs.data(),
+                                envp_ptrs.data());
+    if(spawn_res != 0) {
+        return -1;
+    }
+
+    int status = 0;
+    if(waitpid(pid, &status, 0) == -1) {
+        return -1;
+    }
+
+    if(WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    return 0;
+}
 
 namespace catter::proxy::hook {
 
-std::filesystem::path get_hook_path(std::error_code& ec) {
-    auto exe_path = get_executable_path(ec);
-    if(ec) {
-        return {};
-    }
-    return std::filesystem::path(exe_path).parent_path() / config::RELATIVE_PATH_OF_HOOK_LIB;
-}
+void locate_exe(rpc::data::command& command, std::error_code& ec) {
+    std::string result;
+    std::array<char, 128> buffer;
 
-std::filesystem::path get_save_dir(std::error_code& ec) {
-    const char* home = getenv("HOME");
-    if(home == nullptr) {
+    // we use `command -v` instead of `which`, because formmer is in POSIX standard.
+    std::string find_cmd = "command -v " + command.executable;
+    auto fp = popen(find_cmd.c_str(), "r");
+    if(!fp) {
+        ec = std::make_error_code(std::errc::io_error);
+        return;
+    }
+    if(fgets(buffer.data(), buffer.size(), fp) != nullptr) {
+        result = buffer.data();
+        // remove trailing newline
+        if(!result.empty() && result.back() == '\n') {
+            result.pop_back();
+        }
+    }
+    auto ret = pclose(fp);
+    if(ret == -1 || WEXITSTATUS(ret) != 0) {
         ec = std::make_error_code(std::errc::no_such_file_or_directory);
-        return {};
+        return;
     }
-    std::string this_dir = std::format("{}-{}", getpid(), get_thread_id());
-    return std::filesystem::path(home) / config::HOME_RELATIVE_PATH_OF_LOG / this_dir;
+    if(result.empty()) {
+        ec = std::make_error_code(std::errc::no_such_file_or_directory);
+        return;
+    }
+    command.executable = result;
 }
 
-int run(std::span<const char* const> command, std::error_code& ec) {
-    if(command.empty()) {
-        ec = std::make_error_code(std::errc::invalid_argument);
-        return 0;
-    }
-    const auto lib_path = get_hook_path(ec);
-    const auto save_dir = get_save_dir(ec);
+std::filesystem::path get_hook_path(std::error_code& ec) {
+    auto exe_path = util::get_executable_path(ec);
     if(ec) {
-        return 0;
+        return {};
     }
-    std::println("Using hook library at path: {}", lib_path.string());
-    std::println("Saving captured logs to directory: {}", save_dir.string());
+    return std::filesystem::path(exe_path).parent_path() /
+           catter::config::hook::RELATIVE_PATH_OF_HOOK_LIB;
+}
+
+int run(rpc::data::command command, rpc::data::command_id_t id, std::error_code& ec) {
+    const auto lib_path = get_hook_path(ec);
+    if(ec) {
+        return -1;
+    }
+    LOG_INFO("new command id is: {}", id);
     // check hook_lib exists
     if(!std::filesystem::exists(lib_path, ec)) {
         ec = std::make_error_code(std::errc::no_such_file_or_directory);
-        return 0;
-    }
-    // delete and recreate save_dir
-    if(std::filesystem::exists(save_dir, ec)) {
-        if(ec) {
-            return 0;
-        }
-        std::filesystem::remove_all(save_dir, ec);
-        if(ec) {
-            return 0;
-        }
-    }
-
-    std::filesystem::create_directories(save_dir, ec);
-    if(ec) {
-        return 0;
+        return -1;
     }
     std::string joined_command = "";
 #ifdef CATTER_MAC
@@ -72,82 +117,27 @@ int run(std::span<const char* const> command, std::error_code& ec) {
 #endif  // DEBUG
 #endif  // CATTER_MAC
 
-    joined_command += std::format("{}={} {}={} {}={} ",
-                                  config::KEY_PRELOAD,
-                                  lib_path.string(),
-                                  config::KEY_CMD_LOG_FILE,
-                                  save_dir.string(),
-                                  config::KEY_CATTER_PRELOAD_PATH,
-                                  lib_path.string());
-    for(const auto& arg: command) {
-        // consider if the user add LD_PRELOAD in command
-        if(auto arg_sv = std::string_view{arg}; arg_sv.starts_with(config::KEY_PRELOAD)) {
-            arg_sv.remove_prefix(std::char_traits<char>::length(config::KEY_PRELOAD));
-            if(auto pos = arg_sv.find('='); pos != std::string_view::npos) {
-                std::string existing_paths = std::string(arg_sv.substr(pos + 1));
-                // insert firstly
-                joined_command += std::format("{}={}{}{}:{} ",
-                                              config::KEY_PRELOAD,
-                                              lib_path.string(),
-                                              config::OS_PATH_SEPARATOR,
-                                              existing_paths,
-                                              config::OS_PATH_SEPARATOR);
-                continue;
-            }
-        }
-        joined_command += std::format("{} ", arg);
-    }
-    std::println("final cmd is {}", joined_command);
-    // sh -c the command with hook injected
-    // run
-    const int ret = system(joined_command.c_str());
-    return 0;
-};
+    command.env.push_back(std::format("{}={}",
+                                      //   "/usr/lib/gcc/x86_64-linux-gnu/14/libasan.so",
+                                      catter::config::hook::KEY_PRELOAD,
+                                      lib_path.string()));
+    command.env.push_back(std::format("{}={}", catter::config::hook::KEY_CATTER_COMMAND_ID, id));
+    command.env.push_back(
+        std::format("{}={}", catter::config::hook::KEY_CATTER_PROXY_PATH, get_proxy_path()));
+    // remove CATTER_PROXY_ENV_KEY from env to enable hooking in the child process
+    auto rm_it =
+        std::remove_if(command.env.begin(), command.env.end(), [](const std::string& env_entry) {
+            return env_entry.starts_with(config::proxy::CATTER_PROXY_ENV_KEY);
+        });
+    command.env.erase(rm_it, command.env.end());
 
-std::expected<std::vector<std::string>, std::string> collect_all() {
-    auto ec = std::error_code{};
-    auto save_dir = get_save_dir(ec);
-    if(ec) {
-        return std::unexpected(std::format("Failed to get save directory: {}", ec.message()));
+    std::string cmd_for_print = "";
+    cmd_for_print += command.executable;
+    for(auto& arg: command.args) {
+        cmd_for_print += " " + arg;
     }
-    std::vector<std::string> result;
-    if(!std::filesystem::exists(save_dir, ec)) {
-        return std::unexpected(std::format("Save directory does not exist: {}", save_dir.string()));
-    }
-    // tranverse this dir to find all files
-    for(const auto& entry: std::filesystem::directory_iterator(save_dir, ec)) {
-        if(ec) {
-            return std::unexpected(std::format("Failed to access directory entry: {}: {}",
-                                               entry.path().string(),
-                                               ec.message()));
-        }
-
-        if(entry.is_regular_file()) {
-            std::println("Collecting captured log from file: {}", entry.path().string());
-            // read text
-            std::ifstream ifs(entry.path());
-            if(!ifs.is_open()) {
-                return std::unexpected(
-                    std::format("Failed to open commands file: {}", entry.path().string()));
-            }
-            std::string line;
-            while(std::getline(ifs, line)) {
-                if(line.starts_with(config::ERROR_PREFFIX)) {
-                    return std::unexpected(std::format(
-                        "Error captured: {}",
-                        line.substr(std::char_traits<char>::length(config::ERROR_PREFFIX))));
-                } else {
-                    result.push_back(line);
-                }
-            }
-        }
-    }
-    // remove cache
-    std::filesystem::remove_all(save_dir, ec);
-    if(ec) {
-        return std::unexpected(std::format("Failed to remove save directory: {}", ec.message()));
-    }
-    return result;
+    LOG_INFO("| -> Catter-Proxy Final Executing command: {}", cmd_for_print);
+    return run_command(command);
 };
 
 };  // namespace catter::proxy::hook

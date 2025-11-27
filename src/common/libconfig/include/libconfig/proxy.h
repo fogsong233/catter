@@ -1,0 +1,16 @@
+#pragma once
+
+#include "common.h"
+
+namespace catter::config::proxy {
+constexpr const inline static char CATTER_PROXY_ENV_KEY[] = "exec_is_catter_proxy_v1";
+}  // namespace catter::config::proxy
+
+namespace catter::config::proxy {
+#ifdef CATTER_LINUX
+constexpr const inline static char LOG_PATH_REL[] = "log/catter-proxy.log";
+#endif
+#ifdef CATTER_WINDOWS
+#error "TODO"
+#endif
+};  // namespace catter::config::proxy

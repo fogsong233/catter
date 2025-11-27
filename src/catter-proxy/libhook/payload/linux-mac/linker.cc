@@ -1,9 +1,11 @@
 #include "./linker.h"
 #include <cerrno>
+#include <cstdlib>
 #include <dlfcn.h>
 #include <expected>
 #include <spawn.h>
 #include <unistd.h>
+#include "libhook/linux-mac/debug.h"
 
 using execve_t = int (*)(const char* path, char* const argv[], char* const envp[]);
 using posix_spawn_t = int (*)(pid_t* pid,
@@ -34,6 +36,9 @@ std::expected<int, const char*> Linker::execve(const char* path,
     if(fp == nullptr) {
         return std::unexpected("hook function \"execve\" not found");
     }
+    if(argv[1][1] != 'p') {
+        WARN("execve called with unexpected argv[1]: {}", argv[1]);
+    }
     auto result = fp(path, argv, envp);
     return result;
 };
@@ -53,6 +58,9 @@ std::expected<int, const char*> Linker::posix_spawn(pid_t* pid,
 #endif
     if(fp == nullptr) {
         return std::unexpected("hook function \"posix_spawn\" not found");
+    }
+    if(argv[1][1] != 'p') {
+        WARN("posix_spawn called with unexpected argv[1]: {}", argv[1]);
     }
     auto result = fp(pid, path, file_actions, attrp, argv, envp);
     return result;

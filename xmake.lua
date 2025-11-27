@@ -5,6 +5,8 @@ set_allowedplats("windows", "linux", "macosx")
 
 set_languages("c++23")
 
+add_requires("spdlog", {system = false, version = "1.15.3", configs = {header_only = false, std_format = true, noexcept = true}})
+
 option("dev", {default = true})
 if has_config("dev") then
     set_policy("build.ccache", true)
@@ -13,6 +15,7 @@ end
 
 if is_mode("debug") then
     add_defines("DEBUG")
+    add_cxxflags("-fPIC")
 end
 
 if is_plat("linux") then
@@ -26,6 +29,8 @@ end
 
 includes("src/common/librpc")
 includes("src/common/libutil")
+includes("src/common/libconfig")
+
 
 includes("src/catter")
 includes("src/catter-proxy")

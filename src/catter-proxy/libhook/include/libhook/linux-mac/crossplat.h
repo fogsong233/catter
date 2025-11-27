@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <system_error>
 #include <unistd.h>
 #include <array>
 #include <limits.h>
@@ -52,25 +50,6 @@ static const char** environment() noexcept {
 #else
 #error "Unsupported platform"
 #endif
-
-inline std::string get_executable_path(std::error_code& ec) {
-    std::array<char, PATH_MAX> buf;
-#if defined(CATTER_LINUX)
-    ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
-    if(len <= 0) {
-        ec = std::error_code(errno, std::generic_category());
-        return {};
-    }
-    buf[len] = '\0';
-#elif defined(CATTER_MAC)
-    uint32_t size = buf.size();
-    if(_NSGetExecutablePath(buf.data(), &size) != 0) {
-        ec = std::error_code(ERANGE, std::generic_category());
-        return {};
-    }
-#endif
-    return std::string(buf.data());
-}
 
 inline std::string get_executable_path() {
     std::array<char, PATH_MAX> buf;

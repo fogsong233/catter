@@ -1,11 +1,16 @@
 #pragma once
-#include "data.h"
+#include "librpc/data.h"
 
 namespace catter::rpc::server {
 
-data::command_id_t init(data::command_id_t parent_id);
+data::decision_info make_decision(data::command_id_t parent_id, data::command cmd);
 
-data::action make_decision(data::command cmd);
+/**
+ * @brief Report an error to the server
+ * Every error in proxy and hook will finally report to main program.
+ * If we cannot get parent_id, parent_id = -1
+ */
+void report_error(data::command_id_t parent_id, std::string error_msg);
 
-void finish(int ret_code);
+void finish(data::command_id_t parent_id, int ret_code);
 }  // namespace catter::rpc::server

@@ -27,6 +27,13 @@ public:
      * @return the address of the persisted input.
      */
     const char* store(const char* input) noexcept;
+    /**
+     * Push the input to the buffer, will not add zero end of string.
+     *
+     * @param input to persist.
+     * @return whether the push is successful.
+     */
+    bool push(const char* input) noexcept;
 
     Buffer(const Buffer&) noexcept = delete;
     Buffer& operator= (const Buffer&) noexcept = delete;
