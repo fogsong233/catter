@@ -1,4 +1,4 @@
-#include "libqjs.h"
+#include "libqjs/qjs.h"
 
 #include <print>
 using namespace catter;
@@ -6,20 +6,7 @@ using namespace catter;
 std::string_view example_script =
     R"(
     import * as catter from "catter";
-
-    try {
-        catter.add_callback(() => {
-            // Invalid callback: missing parameter
-        });
-    } catch (e) {
-        catter.log("Caught exception when adding invalid callback: " + e.message);
-    }
-
-    catter.add_callback((msg) => {
-        catter.log("Callback invoked from JS: " + msg);
-        throw new Error("Test exception from JS callback");
-    });
-
+    catter.print("Hello from QuickJS!") ;
 )";
 
 struct Handler {

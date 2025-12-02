@@ -4,9 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
-#include <functional>
 #include <optional>
-#include <print>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -195,6 +193,18 @@ public:
         return JS_IsException(this->val);
     }
 
+    bool is_undefined() const noexcept {
+        return JS_IsUndefined(this->val);
+    }
+
+    bool is_null() const noexcept {
+        return JS_IsNull(this->val);
+    }
+
+    bool is_empty() const noexcept {
+        return this->is_null() || this->is_undefined();
+    }
+
     bool is_valid() const noexcept {
         return this->ctx != nullptr;
     }
@@ -317,6 +327,29 @@ public:
         return ret;
     }
 
+    /**
+     * @brief Get the property object, noticed that property maybe undefined.
+     */
+    Value operator[] (const std::string& prop_name) const {
+        return get_property(prop_name);
+    }
+
+    /**
+     * @brief Get the optional property object, if in js, it is undefined or throw a exception,
+     * return nullopt.
+     *
+     * @param prop_name
+     * @return std::optional<Value>
+     */
+    std::optional<Value> get_optional_property(const std::string& prop_name) const noexcept {
+        auto ret = Value{this->context(),
+                         JS_GetPropertyStr(this->context(), this->value(), prop_name.c_str())};
+        if(ret.is_exception() || ret.is_undefined()) {
+            return std::nullopt;
+        }
+        return ret;
+    }
+
     template <typename T>
     static Value from(T&& value) noexcept {
         return detail::object_trans<std::remove_cvref_t<T>>::from(std::forward<T>(value));
@@ -433,7 +466,7 @@ public:
 
         if constexpr(std::is_convertible_v<Invocable, Sign*> ||
                      std::is_lvalue_reference_v<Invocable&&>) {
-            JS_SetOpaque(result.value(), &invocable);
+            JS_SetOpaque(result.value(), static_cast<void*>(invocable));
         } else {
             JS_SetOpaque(result.value(), new Opaque(std::forward<Invocable>(invocable)));
         }
@@ -709,10 +742,11 @@ public:
     Context& operator= (Context&&) = default;
     ~Context() = default;
 
-    // Get or create a CModule with the given name
-    // @name: The name of the module.
-    // Different from context, it is used for js module system.
-    // In js, you can import it via `import * as mod from 'name';`
+    /** Get or create a CModule with the given name
+     * @name: The name of the module.
+     * Different from context, it is used for js module system.
+     * In js, you can import it via `import * as mod from 'name';`
+     **/
     const CModule& cmodule(const std::string& name) const {
         if(auto it = this->raw->modules.find(name); it != this->raw->modules.end()) {
             return it->second;

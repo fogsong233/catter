@@ -16,10 +16,15 @@ export default {
     }),
     typescript({
       tsconfig: "./tsconfig.rollup.json",
-      outputToFilesystem: false,
-      declaration: false,
-      declarationMap: false,
-      compilerOptions: {},
+      compilerOptions: {
+        declarationDir: undefined,
+
+        declaration: false,
+        declarationMap: false,
+
+        module: "esnext",
+        moduleResolution: "bundler"
+      },
     }),
   ],
 };
