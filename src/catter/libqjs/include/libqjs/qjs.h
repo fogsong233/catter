@@ -761,8 +761,8 @@ public:
         return result.value();
     }
 
-    void push(T&& value) {
-        auto js_val = qjs::Value::from(this->context(), std::forward<T>(value));
+    void push(T&& item) {
+        auto js_val = qjs::Value::from(this->context(), std::forward<T>(item));
         uint32_t len = this->length();
         auto res = JS_SetPropertyUint32(this->context(), this->value(), len, js_val.release());
         if(res < 0) {
