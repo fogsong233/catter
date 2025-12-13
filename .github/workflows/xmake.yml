@@ -83,3 +83,6 @@ jobs:
             xmake config --clean --yes --mode=release
           fi
           xmake --verbose --diagnosis
+
+      - name: Test
+        run: xmake test --verbose --diagnosis
