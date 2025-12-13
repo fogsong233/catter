@@ -1,7 +1,6 @@
 #include <fstream>
 #include <quickjs.h>
 #include <string>
-#include <sys/_types/_u_int32_t.h>
 #include <system_error>
 #include "../apitool.h"
 #include "js.h"
