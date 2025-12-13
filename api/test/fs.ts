@@ -66,3 +66,8 @@ const newFilePath = fs.path.joinAll(
 );
 debug.assertThrow(fs.createFile(newFilePath));
 debug.assertThrow(fs.exists(newFilePath) && fs.isFile(newFilePath));
+
+// create dirs
+const newDirPath = fs.path.joinAll(testEnvPath, "x", "y", "z");
+debug.assertThrow(fs.mkdir(newDirPath));
+debug.assertThrow(fs.exists(newDirPath) && fs.isDir(newDirPath));

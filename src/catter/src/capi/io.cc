@@ -1,7 +1,10 @@
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <print>
 #include <quickjs.h>
 #include <string>
+#include <sys/types.h>
 #include <unordered_map>
 #include "../apitool.h"
 #include "libqjs/qjs.h"
@@ -33,10 +36,10 @@ CAPI(stdout_print_blue, (const std::string content)->void) {
 // file read / write
 // notice that we have ensure that is in single thread
 namespace {
-static long file_id_cnt = 1;
+static int64_t file_id_cnt = 1;
 static std::unordered_map<int, std::fstream> open_files;
 
-CAPI(file_open, (std::string path)->long) {
+CAPI(file_open, (std::string path)->int64_t) {
     std::fstream fs;
     fs.exceptions(std::fstream::badbit);
     fs.open(catter::capi::util::absolute_of(path), std::ios::in | std::ios::out);
@@ -48,7 +51,7 @@ CAPI(file_open, (std::string path)->long) {
     return id;
 }
 
-CAPI(file_close, (long file_id)->void) {
+CAPI(file_close, (int64_t file_id)->void) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
@@ -58,7 +61,7 @@ CAPI(file_close, (long file_id)->void) {
 }
 
 /// whence: 0 - beg, 1 - cur, 2 - end
-CAPI(file_seek_read, (long file_id, long offset, long whence)->void) {
+CAPI(file_seek_read, (int64_t file_id, int64_t offset, uint32_t whence)->void) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
@@ -74,7 +77,7 @@ CAPI(file_seek_read, (long file_id, long offset, long whence)->void) {
     it->second.seekg(offset, dir);
 };
 
-CAPI(file_seek_write, (long file_id, long offset, long whence)->void) {
+CAPI(file_seek_write, (int64_t file_id, int64_t offset, uint32_t whence)->void) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
@@ -90,25 +93,27 @@ CAPI(file_seek_write, (long file_id, long offset, long whence)->void) {
     it->second.seekp(offset, dir);
 };
 
-CAPI(file_tell_read, (long file_id)->long) {
+CAPI(file_tell_read, (int64_t file_id)->int64_t) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
     }
+    it->second.clear();
     return it->second.tellg();
 };
 
-CAPI(file_tell_write, (long file_id)->long) {
+CAPI(file_tell_write, (int64_t file_id)->int64_t) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
     }
+    it->second.clear();
     return it->second.tellp();
 };
 
 /// Receive file_id, size and a ArrayBuffer to write data into
 /// return size that actually read
-CAPI(file_read_n, (long file_id, long buf_size, catter::qjs::Object array_buffer)->long) {
+CAPI(file_read_n, (int64_t file_id, uint32_t buf_size, catter::qjs::Object array_buffer)->int64_t) {
     if(buf_size < 0) {
         throw catter::qjs::Exception("Buffer size must be non-negative!");
         return 0;
@@ -121,7 +126,7 @@ CAPI(file_read_n, (long file_id, long buf_size, catter::qjs::Object array_buffer
         throw catter::qjs::Exception("Third argument must be an ArrayBuffer");
     }
 
-    unsigned long reserved_sz = buf_size;
+    size_t reserved_sz = buf_size;
     auto buf = JS_GetArrayBuffer(array_buffer.context(), &reserved_sz, array_buffer.value());
     if(buf == nullptr || reserved_sz < buf_size) {
         throw catter::qjs::Exception("Failed to get ArrayBuffer data or buffer is too small!");
@@ -132,11 +137,7 @@ CAPI(file_read_n, (long file_id, long buf_size, catter::qjs::Object array_buffer
 
 // Receive file_id, size and a ArrayBuffer to write data from
 // return void
-CAPI(file_write_n, (long file_id, long buf_size, catter::qjs::Object array_buffer)->void) {
-    if(buf_size < 0) {
-        throw catter::qjs::Exception("Buffer size must be non-negative!");
-        return;
-    }
+CAPI(file_write_n, (int64_t file_id, uint32_t buf_size, catter::qjs::Object array_buffer)->void) {
     auto it = open_files.find(file_id);
     if(it == open_files.end()) {
         throw catter::qjs::Exception("Invalid file id: " + std::to_string(file_id));
@@ -145,7 +146,7 @@ CAPI(file_write_n, (long file_id, long buf_size, catter::qjs::Object array_buffe
         throw catter::qjs::Exception("Third argument must be an ArrayBuffer");
     }
 
-    unsigned long reserved_sz = buf_size;
+    size_t reserved_sz = buf_size;
     auto buf = JS_GetArrayBuffer(array_buffer.context(), &reserved_sz, array_buffer.value());
     if(buf == nullptr || reserved_sz < buf_size) {
         throw catter::qjs::Exception("Failed to get ArrayBuffer data or buffer is small!");

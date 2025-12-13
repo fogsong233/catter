@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <fstream>
 #include <quickjs.h>
 #include <string>
@@ -48,7 +49,7 @@ CAPI(fs_pwd, ()->std::string) {
 
 CAPI(fs_path_join_all, (catter::qjs::Object path_parts)->std::string) {
     fs::path result;
-    auto len = path_parts["length"].to<long>().value();
+    auto len = path_parts["length"].to<uint32_t>().value();
     for(size_t i = 0; i < len; ++i) {
         auto part = path_parts[std::to_string(i)].to<std::string>().value();
         if(i == 0) {
