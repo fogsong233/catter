@@ -48,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build js lib and test
+        run: pnpm run build-js-test
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
