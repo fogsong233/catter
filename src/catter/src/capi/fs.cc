@@ -62,9 +62,9 @@ CAPI(fs_path_join_all, (catter::qjs::Object path_parts)->std::string) {
 }
 
 /// return root if no ancestor when doing this part
-CAPI(fs_path_ancestor_n, (std::string path, u_int32_t n)->std::string) {
+CAPI(fs_path_ancestor_n, (std::string path, uint32_t n)->std::string) {
     fs::path p = path;
-    for(u_int32_t i = 0; i < n; ++i) {
+    for(uint32_t i = 0; i < n; ++i) {
         p = p.parent_path();
     }
     return p.string();
