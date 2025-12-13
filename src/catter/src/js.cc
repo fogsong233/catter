@@ -16,7 +16,7 @@ qjs::Runtime rt;
 RuntimeConfig global_config;
 qjs::Object js_mod_obj;
 
-char error_strace[512]{};
+std::string error_strace{};
 enum class PromiseState { Pending, Fulfilled, Rejected };
 PromiseState promise_state = PromiseState::Pending;
 }  // namespace
@@ -58,7 +58,8 @@ static JSValue
     on_promise_reject(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv) {
     promise_state = PromiseState::Rejected;
     if(argc == 0) {
-        std::snprintf(error_strace, sizeof(error_strace), "Promise rejected with no reason");
+        error_strace = "Promise rejected with no reason.";
+        return JS_UNDEFINED;
     }
     JSValue reason = argv[0];
     const char* error_message = JS_ToCString(ctx, reason);
@@ -73,11 +74,9 @@ static JSValue
         if(!JS_IsUndefined(stack_val)) {
             const char* stack_str = JS_ToCString(ctx, stack_val);
             if(stack_str) {
-                std::snprintf(error_strace,
-                              sizeof(error_strace),
-                              "Promise rejected with reason: %s\nStack: %s",
-                              error_message ? error_message : "unknown",
-                              stack_str);
+                error_strace = std::format("Promise rejected with reason: {}\nStack: {}",
+                                           error_message ? error_message : "unknown",
+                                           stack_str);
                 JS_FreeCString(ctx, stack_str);
                 JS_FreeValue(ctx, stack_val);
                 if(error_message)
@@ -110,18 +109,15 @@ static JSValue
     }
 
     if(filename) {
-        std::snprintf(error_strace,
-                      sizeof(error_strace),
-                      "Promise rejected with reason: %s\nat %s:%d:%d",
-                      error_message ? error_message : "unknown",
-                      filename,
-                      line,
-                      column);
+        std::println(error_strace,
+                     "Promise rejected with reason: {}\n at {}:{}:{}",
+                     error_message ? error_message : "unknown",
+                     filename,
+                     line,
+                     column);
     } else {
-        std::snprintf(error_strace,
-                      sizeof(error_strace),
-                      "Promise rejected with reason: %s",
-                      error_message ? error_message : "unknown");
+        error_strace = std::format("Promise rejected with reason: {}",
+                                   error_message ? error_message : "unknown");
     }
 
     if(error_message)

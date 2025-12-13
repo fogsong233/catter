@@ -338,7 +338,7 @@ public:
     /**
      * @brief Set a property on the JavaScript object, it is noexcept due to using in `C`.
      *
-     * @tparam T The type of the value to set.
+     * @tparam T The type of the value to set, if it is JSValue, will free inside.
      * @param prop_name The name of the property to set.
      * @param val The value to set.
      * @return std::optional<qjs::Exception> Returns an exception if setting the property fails;
@@ -349,6 +349,16 @@ public:
         if constexpr(std::is_same_v<JSValue, std::remove_cv_t<T>>) {
             JSValue js_val = val;
             int ret = JS_SetPropertyStr(this->context(), this->value(), prop_name.c_str(), js_val);
+            if(ret < 0) {
+                return qjs::Exception(detail::dump(this->context()));
+            }
+        }
+        if constexpr(std::is_same_v<Value, std::remove_cv_t<T>>) {
+            Value js_val = std::forward<T>(val);
+            int ret = JS_SetPropertyStr(this->context(),
+                                        this->value(),
+                                        prop_name.c_str(),
+                                        js_val.release());
             if(ret < 0) {
                 return qjs::Exception(detail::dump(this->context()));
             }
@@ -438,8 +448,9 @@ class Function {
 template <typename R, typename... Args>
 class Function<R(Args...)> : private Object {
 public:
-    using AllowParamTypes = detail::type_list<bool, int64_t, std::string, Object, long>;
-    using AllowRetTypes = detail::type_list<bool, int64_t, std::string, Object, long>;
+    using AllowParamTypes =
+        detail::type_list<bool, int64_t, std::string, Object, int32_t, uint32_t>;
+    using AllowRetTypes = detail::type_list<bool, int64_t, std::string, Object, int32_t, uint32_t>;
 
     static_assert((AllowParamTypes::contains_v<Args> && ...),
                   "Function parameter types must be one of the allowed types");
@@ -581,7 +592,7 @@ private:
                          JSValueConst this_val,
                          int argc,
                          JSValueConst* argv,
-                         int flags) noexcept {
+                         [[maybe_unused]] int flags) noexcept {
         if(argc != sizeof...(Args)) {
             return JS_ThrowTypeError(ctx, "Incorrect number of arguments");
         }
@@ -730,7 +741,11 @@ public:
 
     uint32_t length() const {
         qjs::Value len_val = this->get_property("length");
-        return len_val.to<uint32_t>().value();
+        auto len_opt = len_val.to<uint32_t>();
+        if(!len_opt.has_value()) {
+            throw qjs::Exception("Fail to get array length property!");
+        }
+        return len_opt.value();
     }
 
     T get(uint32_t index) const {
@@ -781,7 +796,7 @@ struct value_trans<Num> {
     static Value from(JSContext* ctx, Num value) noexcept {
         if constexpr(std::is_unsigned_v<Num> && sizeof(Num) <= sizeof(uint32_t)) {
             return Value{ctx, JS_NewUint32(ctx, static_cast<uint32_t>(value))};
-        } else if(std::is_signed_v<Num>) {
+        } else if constexpr(std::is_signed_v<Num>) {
             return Value{ctx, JS_NewInt64(ctx, static_cast<int32_t>(value))};
         } else {
             static_assert(meta::dep_true<Num>, "Unsupported integral type for value");
