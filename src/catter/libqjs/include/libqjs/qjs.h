@@ -285,7 +285,7 @@ private:
  * @brief A specialized Value that represents a JavaScript object.
  * It inherits from Value and provides object-specific operations like property access.
  */
-class Object : private Value {
+class Object : protected Value {
 public:
     using Value::Value;
     using Value::is_valid;
@@ -446,7 +446,7 @@ class Function {
  * The return type must be void or types in AllowRetTypes, or JSValue.
  */
 template <typename R, typename... Args>
-class Function<R(Args...)> : private Object {
+class Function<R(Args...)> : protected Object {
 public:
     using AllowParamTypes =
         detail::type_list<bool, int64_t, std::string, Object, int32_t, uint32_t, long, int>;
@@ -519,6 +519,10 @@ public:
         return result;
     }
 
+
+
+
+    using SignCtx = R(JSContext*, Args...);
     /**
      * @brief Create a Function from a C function pointer.
      * This method wraps a C function pointer so that it can be called from JavaScript.
@@ -529,11 +533,15 @@ public:
      * @param ctx The QuickJS context.
      * @return A Function object representing the wrapped C function.
      */
-    template <auto FnPtr>
-        requires std::is_pointer_v<decltype(FnPtr)> &&
-                 std::is_function_v<std::remove_pointer_t<decltype(FnPtr)>>
+    template <SignCtx* FnPtr>
     static Function from_raw(JSContext* ctx, const char* name) noexcept {
-        Function<Sign> result{ctx, JS_NewCFunction(ctx, FnProxy<FnPtr>, name, sizeof...(Args))};
+        Function<Sign> result{ctx, JS_NewCFunction(ctx, proxy<FnPtr>, name, sizeof...(Args))};
+        return result;
+    }
+
+    template <Sign* FnPtr>
+    static Function from_raw(JSContext* ctx, const char* name) noexcept {
+        Function<Sign> result{ctx, JS_NewCFunction(ctx, proxy<FnPtr>, name, sizeof...(Args))};
         return result;
     }
 
@@ -545,15 +553,9 @@ public:
 
     R invoke(const Object& this_obj, Args... args) const {
 
-#ifdef _MSC_VER
-        // MSVC have some problem, so we need to use a lambda here
-        auto argv = std::array<JSValue, sizeof...(Args)>{[&] {
-            return qjs::Value::from(this->context(), args).release();
-        }()...};
-#else
         auto argv = std::array<JSValue, sizeof...(Args)>{
             qjs::Value::from(this->context(), args).release()...};
-#endif
+
         auto value = qjs::Value{this->context(),
                                 JS_Call(this->context(),
                                         this->value(),
@@ -586,16 +588,12 @@ public:
     }
 
 private:
-    template <typename Opaque, typename Register>
-    static JSValue proxy(JSContext* ctx,
-                         JSValueConst func_obj,
-                         JSValueConst this_val,
-                         int argc,
-                         JSValueConst* argv,
-                         [[maybe_unused]] int flags) noexcept {
-        if(argc != sizeof...(Args)) {
+    template <typename Invocable>
+    static JSValue invoke_helper(JSContext* ctx, int argc, JSValueConst* argv, Invocable&& fn) {
+        if (argc != sizeof...(Args)) {
             return JS_ThrowTypeError(ctx, "Incorrect number of arguments");
         }
+
         return [&]<size_t... Is>(std::index_sequence<Is...>) -> JSValue {
             auto transformer = [&]<size_t N>(std::in_place_index_t<N>) {
                 using T = detail::type_get<Params, N>;
@@ -610,120 +608,63 @@ private:
                 }
                 throw qjs::Exception("Failed to convert function parameter");
             };
+            try {
+                if constexpr(std::is_void_v<R>) {
+                    fn(transformer(std::in_place_index<Is>)...); 
+                    return JS_UNDEFINED;
+                } else {
+                    auto res = fn(transformer(std::in_place_index<Is>)...);
 
-            if(auto* ptr = static_cast<Opaque*>(
-                   JS_GetOpaque(func_obj, Register::get(JS_GetRuntime(ctx))))) {
-                try {
-                    if constexpr(std::is_void_v<R>) {
-                        (*ptr)(transformer(std::in_place_index<Is>)...);
-                        return JS_UNDEFINED;
-                    } else if constexpr(std::is_same_v<R, Object>) {
-                        auto res = (*ptr)(transformer(std::in_place_index<Is>)...);
+                    if constexpr(std::is_same_v<R, Object>) {
                         return res.release();
                     } else {
-                        auto res = (*ptr)(transformer(std::in_place_index<Is>)...);
                         return qjs::Value::from(ctx, res).release();
                     }
-                } catch(const qjs::Exception& e) {
-                    return JS_ThrowInternalError(ctx, "Exception in C++ function: %s", e.what());
-                } catch(const std::exception& e) {
-                    return JS_ThrowInternalError(
-                        ctx,
-                        "This is an Unexpected exception. If you encounter this, please report a bug to the author: %s",
-                        e.what());
                 }
-            } else {
-                return JS_ThrowInternalError(ctx, "Internal error: C++ functor is null");
+            } catch(const qjs::Exception& e) {
+                return JS_ThrowInternalError(ctx, "Exception in C++ function: %s", e.what());
+            } catch(const std::exception& e) {
+                return JS_ThrowInternalError(ctx, "Unexpected exception: %s", e.what());
             }
         }(std::make_index_sequence<sizeof...(Args)>{});
     }
 
-    /**
-     * @brief A generic function proxy for C function pointers.
-     * This function template allows wrapping C function pointers to be used as JavaScript
-     * functions in QuickJS.
-     * You should ensure that FnPtr is a valid function pointer type.
-     * It supports the first parameter to be JSContext*, and it is optional.
-     */
-    template <auto FnPtr>
-        requires std::is_pointer_v<decltype(FnPtr)> &&
-                 std::is_function_v<std::remove_pointer_t<decltype(FnPtr)>>
-    static auto FnProxy(JSContext* ctx,
-                        JSValueConst this_val,
-                        int argc,
-                        JSValueConst* argv) noexcept -> JSValue {
-        using RawFuncType = std::remove_cvref_t<decltype(*FnPtr)>;
-        using RawParamTupleTy = catter::meta::FuncDecomposer<RawFuncType>::ParamTy;
-        using RetTy = catter::meta::FuncDecomposer<RawFuncType>::RetTy;
-        constexpr bool has_ctx = [&] {
-            if constexpr(std::tuple_size_v<RawParamTupleTy> > 0) {
-                using FirstParam = std::tuple_element_t<0, RawParamTupleTy>;
-                if constexpr(std::is_same_v<FirstParam, JSContext*>) {
-                    return true;
-                }
-            }
-            return false;
-        }();
-        using ParamTupleTy = meta::tuple_slice_t<RawParamTupleTy, has_ctx ? 1 : 0>;
-
-        constexpr size_t ParamCount = std::tuple_size_v<ParamTupleTy>;
-        if(argc != ParamCount) {
-            return JS_ThrowTypeError(ctx, "Incorrect number of arguments");
+    template <typename Opaque, typename Register>
+    static JSValue proxy(JSContext* ctx, JSValueConst func_obj, JSValueConst this_val,
+                         int argc, JSValueConst* argv, [[maybe_unused]] int flags) noexcept {
+        
+        auto* ptr = static_cast<Opaque*>(JS_GetOpaque(func_obj, Register::get(JS_GetRuntime(ctx))));
+        
+        if (!ptr) {
+            return JS_ThrowInternalError(ctx, "Internal error: C++ functor is null");
         }
-        return [&]<size_t... Is>(std::index_sequence<Is...>) -> JSValue {
-            auto transformer = [&]<size_t N>(std::in_place_index_t<N>) {
-                using T = std::tuple_element_t<N, ParamTupleTy>;
-                if constexpr(std::is_same_v<T, Object>) {
-                    if(JS_IsObject(argv[N])) {
-                        return Object{ctx, argv[N]};
-                    }
-                } else {
-                    if(auto opt = qjs::Value{ctx, argv[N]}.to<T>(); opt.has_value()) {
-                        return opt.value();
-                    }
-                }
-                throw qjs::Exception("Failed to convert function parameter");
-            };
-            try {
-                if constexpr(has_ctx) {
-                    if constexpr(std::is_void_v<RetTy>) {
-                        (*FnPtr)(ctx, transformer(std::in_place_index<Is>)...);
-                        return JS_UNDEFINED;
-                    } else if constexpr(std::is_same_v<RetTy, Object>) {
-                        auto res = (*FnPtr)(ctx, transformer(std::in_place_index<Is>)...);
-                        return res.release();
-                    } else {
-                        auto res = (*FnPtr)(ctx, transformer(std::in_place_index<Is>)...);
-                        return qjs::Value::from(ctx, res).release();
-                    }
-                } else {
-                    if constexpr(std::is_void_v<RetTy>) {
-                        (*FnPtr)(transformer(std::in_place_index<Is>)...);
-                        return JS_UNDEFINED;
-                    } else if constexpr(std::is_same_v<RetTy, Object>) {
-                        auto res = (*FnPtr)(transformer(std::in_place_index<Is>)...);
-                        return res.release();
-                    } else {
-                        auto res = (*FnPtr)(transformer(std::in_place_index<Is>)...);
-                        return qjs::Value::from(ctx, res).release();
-                    }
-                }
 
-            } catch(const qjs::Exception& e) {
-                return JS_ThrowInternalError(ctx, "Exception in C++ function: %s", e.what());
-            } catch(const std::exception& e) {
-                return JS_ThrowInternalError(
-                    ctx,
-                    "This is an Unexpected exception. If you encounter this, please report a bug to the author: %s",
-                    e.what());
-            }
-        }(std::make_index_sequence<ParamCount>{});
+        return invoke_helper(ctx, argc, argv, [&]<typename... Ts>(Ts&&... args) -> decltype(auto) {
+            return (*ptr)(std::forward<Ts>(args)...);
+        });
+    }
+
+    template <Sign* FnPtr>
+    static JSValue proxy(JSContext* ctx, JSValueConst this_val,
+                         int argc, JSValueConst* argv) noexcept {
+
+        return invoke_helper(ctx, argc, argv, [&]<typename... Ts>(Ts&&... args) -> decltype(auto) {
+            return (*FnPtr)(std::forward<Ts>(args)...);
+        });
+    }
+
+    template <SignCtx* FnPtr>
+    static JSValue proxy(JSContext* ctx, JSValueConst this_val,
+                         int argc, JSValueConst* argv) noexcept {
+        return invoke_helper(ctx, argc, argv, [&]<typename... Ts>(Ts&&... args) -> decltype(auto) {
+            return (*FnPtr)(ctx, std::forward<Ts>(args)...);
+        });
     }
 };
 
 template <typename T>
     requires detail::type_list<bool, int64_t, std::string>::contains_v<T>
-class Array : private Object {
+class Array : protected Object {
 public:
     using Object::Object;
     using Object::is_valid;
