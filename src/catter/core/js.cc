@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <format>
+#include <print>
 #include <quickjs.h>
 #include "config/js-lib.h"
 #include "apitool.h"
@@ -36,6 +37,7 @@ void init_qjs(const RuntimeConfig& config) {
     }
     // init js lib
     assert(config::data::js_lib.data()[config::data::js_lib.size()] == '\0');
+    std::println("{}", config::data::js_lib);
     ctx.eval(catter::config::data::js_lib, "catter", JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_STRICT);
     ctx.eval("import * as catter from 'catter'; globalThis.__catter_mod = catter;",
              "get-mod.js",
