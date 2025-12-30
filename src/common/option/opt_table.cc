@@ -120,7 +120,6 @@ OptTable::OptTable(std::span<const OptTable::Info> option_infos,
             break;
         }
     }
-    assert(this->first_searchable_index != 0 && "No searchable options?");
 
     if(this->_prefixes_union.empty()) {
         std::set<std::string_view> tmp_prefixes_union;
@@ -191,7 +190,7 @@ static bool opt_matches(const OptTable::Info& in, std::string_view option) {
 // GroupedShortOptions is true, -a matches "-abc" and the argument in Args
 // will be updated to "-bc". This overload does not support VisibilityMask
 // or case insensitive options.
-std::optional<ParsedArgument> OptTable::parse_one_arg_grouped(InputArgVec& argv,
+std::optional<ParsedArgument> OptTable::parse_one_arg_grouped(InputArgv argv,
                                                               unsigned& index) const {
     // Anything that doesn't start with PrefixesUnion is an input, as is '-'
     // itself.
@@ -207,10 +206,13 @@ std::optional<ParsedArgument> OptTable::parse_one_arg_grouped(InputArgVec& argv,
 
     const Info* end = this->option_infos.data() + this->option_infos.size();
     auto name = ltrim_all_of(str, this->prefix_chars);
-    const Info* start = std::lower_bound(this->option_infos.data() + this->first_searchable_index,
-                                         end,
-                                         name,
-                                         OptNameLess());
+    const Info* start =
+        (this->tablegen_mode)
+            ? std::lower_bound(this->option_infos.data() + this->first_searchable_index,
+                               end,
+                               name,
+                               OptNameLess())
+            : this->option_infos.data() + this->first_searchable_index;
     const Info* fallback_opt = nullptr;
     unsigned prev = index;
 
@@ -277,7 +279,7 @@ std::optional<ParsedArgument> OptTable::parse_one_arg_grouped(InputArgVec& argv,
     };
 }
 
-std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgVec& argv,
+std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgv argv,
                                                       unsigned& index,
                                                       Visibility visibility_mask) const {
     return internal_parse_one_arg(argv, index, [visibility_mask](const Option& Opt) {
@@ -285,7 +287,7 @@ std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgVec& argv,
     });
 }
 
-std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgVec& argv,
+std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgv argv,
                                                       unsigned& index,
                                                       unsigned flags_to_include,
                                                       unsigned flags_to_exclude) const {
@@ -301,7 +303,7 @@ std::optional<ParsedArgument> OptTable::parse_one_arg(InputArgVec& argv,
 }
 
 std::optional<ParsedArgument>
-    OptTable::internal_parse_one_arg(InputArgVec& argv,
+    OptTable::internal_parse_one_arg(InputArgv argv,
                                      unsigned& index,
                                      std::function<bool(const Option&)> exclude_option) const {
     unsigned prev = index;
@@ -323,7 +325,7 @@ std::optional<ParsedArgument>
     auto name = ltrim_all_of(str, this->prefix_chars);
 
     // Search for the first next option which could be a prefix.
-    start = std::lower_bound(start, end, name, OptNameLess());
+    start = (this->tablegen_mode) ? std::lower_bound(start, end, name, OptNameLess()) : start;
 
     // Options are stored in sorted order, with '\0' at the end of the
     // alphabet. Since the only options which can accept a string must
@@ -383,29 +385,29 @@ std::optional<ParsedArgument>
     };
 }
 
-void OptTable::parse_args(InputArgVec& argv,
+void OptTable::parse_args(InputArgv argv,
                           unsigned& missing_arg_index,
                           unsigned& missing_arg_count,
-                          std::function<void(std::expected<ParsedArgument, std::string>)> fn,
+                          std::function<void(ParsedArgument)> arg_callback,
                           Visibility visibility_mask) const {
     return internal_parse_args(
         argv,
         missing_arg_index,
         missing_arg_count,
-        fn,
+        arg_callback,
         [visibility_mask](const Option& opt) { return !opt.has_visibility_flag(visibility_mask); });
 }
 
-void OptTable::parse_args(InputArgVec& argv,
+void OptTable::parse_args(InputArgv argv,
                           unsigned& missing_arg_index,
                           unsigned& missing_arg_count,
-                          std::function<void(std::expected<ParsedArgument, std::string>)> fn,
+                          std::function<void(ParsedArgument)> arg_callback,
                           unsigned flags_to_include,
                           unsigned flags_to_exclude) const {
     return internal_parse_args(argv,
                                missing_arg_index,
                                missing_arg_count,
-                               fn,
+                               arg_callback,
                                [flags_to_include, flags_to_exclude](const Option& Opt) {
                                    if(flags_to_include && !Opt.has_flag(flags_to_include))
                                        return true;
@@ -415,23 +417,22 @@ void OptTable::parse_args(InputArgVec& argv,
                                });
 }
 
-void
-    OptTable::parse_args(InputArgVec& argv,
-                         std::function<void(std::expected<ParsedArgument, std::string>)> fn) const {
+void OptTable::parse_args(
+    InputArgv argv,
+    std::function<void(std::expected<ParsedArgument, std::string>)> res_err_fn) const {
 
     unsigned MAI, MAC;
-    parse_args(argv, MAI, MAC, fn);
+    parse_args(argv, MAI, MAC, res_err_fn);
     if(MAC) {
-        fn(std::unexpected(argv[MAI] + ": missing argument"));
+        res_err_fn(std::unexpected(argv[MAI] + ": missing argument"));
     }
 }
 
-void OptTable::internal_parse_args(
-    InputArgVec& argv,
-    unsigned& missing_arg_index,
-    unsigned& missing_arg_count,
-    std::function<void(std::expected<ParsedArgument, std::string>)> fn,
-    std::function<bool(const Option&)> exclude_option) const {
+void OptTable::internal_parse_args(InputArgv argv,
+                                   unsigned& missing_arg_index,
+                                   unsigned& missing_arg_count,
+                                   std::function<void(ParsedArgument)> arg_callback,
+                                   std::function<bool(const Option&)> exclude_option) const {
 
     // FIXME: Handle '@' args (or at least error on them).
 
@@ -450,7 +451,7 @@ void OptTable::internal_parse_args(
         // treats all subsequent arguments as positional.
         if(this->dash_dash_parsing && str == "--") {
             while(++index < end) {
-                fn(ParsedArgument{
+                arg_callback(ParsedArgument{
                     .option_id = this->input_option_id,
                     .spelling = std::string_view(argv[index]),
                     .values = {},
@@ -475,6 +476,6 @@ void OptTable::internal_parse_args(
             missing_arg_count = index - prev - 1;
             return;
         }
-        fn(a.value());
+        arg_callback(a.value());
     }
 }

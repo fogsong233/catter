@@ -278,7 +278,7 @@ std::optional<ParsedArgument> Option::accept(const ArgList& args,
         return std::nullopt;
     }
 
-    const Option& unaliased_opt = this->alias();
+    const Option& unaliased_opt = this->unaliased_option();
     if(this->id() == unaliased_opt.id()) {
         return a;
     }
