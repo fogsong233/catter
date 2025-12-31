@@ -153,6 +153,12 @@ public:
                                        0,
                                        "input content");
         }
+
+        constexpr auto alias_of(unsigned origin_id, const char* alias_args = nullptr) {
+            this->alias_args = alias_args;
+            this->alias_id = origin_id;
+            return *this;
+        }
     };
 
 public:
@@ -184,6 +190,8 @@ private:
 
     bool grouped_short_options = false;
     bool dash_dash_parsing = false;
+
+    bool dash_dash_as_single_pack = false;
     const char* env_var = nullptr;
 
     unsigned input_option_id = 0;
@@ -312,6 +320,14 @@ public:
     /// arguments as positional. E.g. -- -a -b gives two positional inputs.
     auto set_dash_dash_parsing(bool value) {
         this->dash_dash_parsing = value;
+        return *this;
+    }
+
+    // command part 1-- [options] will be treated as a single option pack
+    // which values contains all the rest arguments
+    // and spelling is "--"
+    auto set_dash_dash_as_single_pack(bool value) {
+        this->dash_dash_as_single_pack = value;
         return *this;
     }
 

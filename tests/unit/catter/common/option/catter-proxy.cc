@@ -1,23 +1,15 @@
+#include "util.h"
 #include "util/output.h"
 #include <boost/ut.hpp>
-#include <exception>
 #include <opt-data/catter-proxy/table.h>
-#include <print>
 #include <string_view>
 #include <vector>
-#include <ranges>
 
 using namespace boost;
 using namespace catter;
 using namespace std::literals::string_view_literals;
 
-ut::suite<"opt-catter-proxy"> ocp = [] {
-    auto split2vec = [](std::string_view str) {
-        return std::views::split(str, ' ') | std::views::transform([](auto&& rng) {
-                   return std::string(rng.begin(), rng.end());
-               }) |
-               std::ranges::to<std::vector<std::string>>();
-    };
+static ut::suite<"opt-catter-proxy"> ocp = [] {
     ut::test("option table has expected options") = [&] {
         auto argv = std::vector<std::string>{"-p", "1234"};
         optdata::catter_proxy::catter_proxy_opt_table.parse_args(
@@ -88,7 +80,6 @@ ut::suite<"opt-catter-proxy"> ocp = [] {
     };
     ut::test("test missing value") = [&] {
         auto argv = split2vec("-p");
-        unsigned mai = 0, mac = 0;
         optdata::catter_proxy::catter_proxy_opt_table.parse_args(
             argv,
             [](std::expected<opt::ParsedArgument, std::string> arg) {
