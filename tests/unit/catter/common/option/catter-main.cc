@@ -15,7 +15,7 @@ static ut::suite<"opt-catter-main"> ocp = [] {
         optdata::main::catter_proxy_opt_table.parse_args(
             argv,
             [](std::expected<opt::ParsedArgument, std::string> arg) {
-                ut::expect(arg.has_value()) << arg.error();
+                ut::expect(arg.has_value());
                 switch(arg->option_id.id()) {
                     case optdata::main::OPT_HELP:
                         ut::expect(false) << "Did not expect help option.";
