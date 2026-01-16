@@ -1,10 +1,3 @@
-//===- Option.cpp - Abstract Driver Options -------------------------------===//
-//
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
 #include "option.h"
 #include "parsed_arg.h"
 #include "opt_table.h"

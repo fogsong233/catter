@@ -2,6 +2,7 @@
 #include <string_view>
 #include <vector>
 #include <ranges>
+#include <string>
 
 inline auto split2vec(std::string_view str) {
     return std::views::split(str, ' ') |
