@@ -134,6 +134,16 @@ target("ut-catter")
 
     add_tests("default")
 
+target("ut-hook-unix")
+    set_default(false)
+    set_kind("binary")
+    add_files("tests/unit/unix-hook/**.cc")
+    add_packages("boost_ut")
+    add_deps("catter-hook-unix-support")
+    if is_mode("linux", "macosx") then
+        add_tests("default")
+    end
+
 
 target("catter-hook-win64")
     set_default(is_plat("windows"))
@@ -144,16 +154,30 @@ target("catter-hook-win64")
     add_packages("microsoft-detours")
     add_cxxflags("-fno-exceptions", "-fno-rtti")
 
-target("catter-hook-unix")
+target("catter-hook-unix-support")
     set_default(is_plat("linux", "macosx"))
-    set_kind("shared")
+    set_kind("object")
     if is_mode("debug") then
         add_deps("common")
     end
 
     add_includedirs("src/catter-hook/")
     add_includedirs("src/catter-hook/linux-mac/payload/")
-    add_files("src/catter-hook/linux-mac/payload/**.cc")
+    add_files("src/catter-hook/linux-mac/payload/*.cc")
+    if is_mode("release") then
+        add_cxxflags("-fvisibility=hidden")
+    end
+
+target("catter-hook-unix")
+    set_default(is_plat("linux", "macosx"))
+    set_kind("shared")
+    if is_mode("debug") then
+        add_deps("common")
+    end
+    add_deps("catter-hook-unix-support")
+    add_includedirs("src/catter-hook/")
+    add_includedirs("src/catter-hook/linux-mac/payload/")
+    add_files("src/catter-hook/linux-mac/payload/inject/*.cc")
     add_syslinks("dl")
     if is_mode("release") then
         add_cxxflags("-fvisibility=hidden")
