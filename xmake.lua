@@ -3,6 +3,8 @@ set_project("catter")
 add_rules("mode.debug", "mode.release", "mode.releasedbg")
 set_allowedplats("windows", "linux", "macosx")
 
+set_languages("c++23")
+
 option("dev", {default = true})
 option("test", {default = true})
 
@@ -43,7 +45,6 @@ if is_plat("macosx") then
     }})
 end
 
-set_languages("c++23")
 
 if is_mode("debug") and is_plat("linux", "macosx") then
     -- hook.so will use a static lib to log in debug mode
@@ -140,7 +141,7 @@ target("ut-hook-unix")
     add_files("tests/unit/unix-hook/**.cc")
     add_packages("boost_ut")
     add_deps("catter-hook-unix-support")
-    if is_mode("linux", "macosx") then
+    if is_plat("linux", "macosx") then
         add_tests("default")
     end
 
@@ -160,13 +161,10 @@ target("catter-hook-unix-support")
     if is_mode("debug") then
         add_deps("common")
     end
-
-    add_includedirs("src/catter-hook/")
-    add_includedirs("src/catter-hook/linux-mac/payload/")
+    add_syslinks("dl")
+    add_includedirs("src/catter-hook/", { public = true })
+    add_includedirs("src/catter-hook/linux-mac/payload/", { public = true })
     add_files("src/catter-hook/linux-mac/payload/*.cc")
-    if is_mode("release") then
-        add_cxxflags("-fvisibility=hidden")
-    end
 
 target("catter-hook-unix")
     set_default(is_plat("linux", "macosx"))
@@ -174,15 +172,22 @@ target("catter-hook-unix")
     if is_mode("debug") then
         add_deps("common")
     end
-    add_deps("catter-hook-unix-support")
+    add_cxxflags("-fvisibility=hidden")
+    add_cxxflags("-fvisibility-inlines-hidden")
+    if is_plat("linux") then
+        add_shflags("-Wl,--version-script=src/catter-hook/linux-mac/payload/inject/exports.map")
+    end
+    if is_plat("macosx") then
+        add_shflags("-Wl,-exported_symbols_list,/dev/null")
+    end
+    add_syslinks("dl")
+    add_cxflags("-ffunction-sections", "-fdata-sections")
+    add_shflags("-static-libstdc++", "-static-libgcc", {force = true})
+    add_shflags("-Wl,--gc-sections", {force = true})
+
     add_includedirs("src/catter-hook/")
     add_includedirs("src/catter-hook/linux-mac/payload/")
-    add_files("src/catter-hook/linux-mac/payload/inject/*.cc")
-    add_syslinks("dl")
-    if is_mode("release") then
-        add_cxxflags("-fvisibility=hidden")
-        add_cxxflags("-nostdlib++")
-    end
+    add_files("src/catter-hook/linux-mac/payload/**.cc")
 
 target("catter-hook")
     set_kind("object")
